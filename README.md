@@ -116,7 +116,6 @@ pub fn main() {
 git clone https://github.com/Comamoca/subaru
 cd subaru
 deno task setup
-gleam build
 ```
 
 ## ⛏️ Development
