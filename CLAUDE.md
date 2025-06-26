@@ -212,6 +212,8 @@ The project uses a Nix flake with devenv for reproducible development:
 
 This project follows [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) specification for consistent commit messages.
 
+**IMPORTANT**: All commits MUST be GPG signed. Ensure `git config --global commit.gpgsign true` is set.
+
 ### Format
 
 ```

@@ -5,7 +5,6 @@ import Subaru from "../src/subaru_runner.ts";
 // Example main code that uses preloaded modules
 const mainCode = `
 import gleam/io
-import gleam/int
 import my_utils
 
 pub fn main() {
@@ -13,7 +12,7 @@ pub fn main() {
   io.println(greeting)
   
   let result = my_utils.add(5, 3)
-  io.println("5 + 3 = " <> int.to_string(result))
+  io.println("5 + 3 = " <> my_utils.int_to_string(result))
 }
 `;
 
@@ -36,14 +35,9 @@ pub fn greet(name: String) -> String {
 pub fn add(a: Int, b: Int) -> Int {
   a + b
 }
-`,
-      },
-      {
-        moduleName: "gleam/int",
-        code: `
-// Simple int module for string conversion
+
 @external(javascript, "globalThis", "String")
-pub fn to_string(value: Int) -> String
+pub fn int_to_string(value: Int) -> String
 `,
       },
     ],
