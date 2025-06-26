@@ -6,7 +6,7 @@
 ![Open Issues](https://img.shields.io/github/issues-raw/Comamoca/subaru?style=flat-square)
 ![Bug Issues](https://img.shields.io/github/issues/Comamoca/subaru/bug?style=flat-square)
 
-<img src="https://emoji2svg.deno.dev/api/🦊" alt="eyecatch" height="100">
+<img src="https://emoji2svg.deno.dev/api/✨️" alt="eyecatch" height="100">
 
 # subaru
 
