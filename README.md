@@ -15,7 +15,6 @@ A Gleam WASM runner that allows executing Gleam code dynamically using WebAssemb
 <br>
 <br>
 
-
 </div>
 
 <div align="center">
@@ -45,18 +44,20 @@ subaru --url https://example.com/script.gleam
 ```
 
 - Execute Gleam files directly without compilation
-- Run Gleam code from strings, files, or remote URLs  
+- Run Gleam code from strings, files, or remote URLs
 - Dynamic compilation using Gleam's WebAssembly compiler
 - Worker-based execution for safe code isolation
 - Configurable logging and debug output
 
-## ⬇️  Install
+## ⬇️ Install
 
 ### Prerequisites
+
 - [Deno](https://deno.land/) - Modern runtime for JavaScript and TypeScript
 - [Gleam](https://gleam.run/) - For local Gleam development (optional)
 
 ### Using deno install (Recommended)
+
 ```sh
 # Install globally
 deno install --allow-all -n subaru https://github.com/Comamoca/subaru/raw/main/src/cli.ts
@@ -69,6 +70,7 @@ pub fn main() { io.println("Hello!") }'
 ```
 
 ### Direct URL execution
+
 ```sh
 # Run directly from GitHub without installation
 deno run --allow-all https://github.com/Comamoca/subaru/raw/main/src/cli.ts --help
@@ -79,6 +81,7 @@ pub fn main() { io.println("Hello from URL!") }'
 ```
 
 ### From GitHub (Local Development)
+
 ```sh
 # Clone repository
 git clone https://github.com/Comamoca/subaru
@@ -92,6 +95,7 @@ deno task cli --help
 ```
 
 ### As Gleam Package
+
 ```sh
 gleam add subaru@1
 ```
@@ -105,6 +109,7 @@ pub fn main() {
 ```
 
 ### From Source
+
 ```sh
 git clone https://github.com/Comamoca/subaru
 cd subaru
@@ -112,7 +117,7 @@ deno task setup
 gleam build
 ```
 
-## ⛏️   Development
+## ⛏️ Development
 
 ```sh
 # Using Nix (recommended)
@@ -153,14 +158,17 @@ This project is open source and available under the MIT License.
 ### 🧩 Modules
 
 #### TypeScript/Deno Dependencies
+
 - **Deno Standard Library** - File system, path utilities, testing
 - **Gleam WASM Compiler** - Dynamic Gleam compilation to JavaScript
 
 #### Gleam Dependencies
+
 - **gleam_stdlib** - Standard library functions for Gleam
 - **gleeunit** - Testing framework for Gleam projects
 
 #### Development Environment
+
 - **Nix Flakes** - Reproducible development environment management
 - **devenv** - Development shell configuration and tooling
 - **pre-commit hooks** - Security scanning (git-secrets, ripsecrets)

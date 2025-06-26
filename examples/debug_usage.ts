@@ -18,26 +18,26 @@ async function testDebugModes() {
   console.log("--------------------------------------------");
   const defaultResult = await Subaru.run(gleamCode);
   if (defaultResult.success) {
-    defaultResult.output.forEach(line => console.log(`   ${line}`));
+    defaultResult.output.forEach((line) => console.log(`   ${line}`));
   }
 
   console.log("\n2. Error level (shows compilation errors):");
   console.log("------------------------------------------");
-  const errorResult = await Subaru.run(gleamCode, { 
-    logLevel: 'error'
+  const errorResult = await Subaru.run(gleamCode, {
+    logLevel: "error",
   });
   if (errorResult.success) {
-    errorResult.output.forEach(line => console.log(`   ${line}`));
+    errorResult.output.forEach((line) => console.log(`   ${line}`));
   }
 
   console.log("\n3. Debug mode enabled:");
   console.log("---------------------");
-  const debugResult = await Subaru.run(gleamCode, { 
+  const debugResult = await Subaru.run(gleamCode, {
     debug: true,
-    logLevel: 'debug'
+    logLevel: "debug",
   });
   if (debugResult.success) {
-    debugResult.output.forEach(line => console.log(`   ${line}`));
+    debugResult.output.forEach((line) => console.log(`   ${line}`));
   }
 
   // Remote execution example
@@ -46,14 +46,14 @@ async function testDebugModes() {
   try {
     const remoteResult = await Subaru.runFromUrl(
       "https://raw.githubusercontent.com/Comamoca/subaru/main/examples/remote_example.gleam",
-      { logLevel: 'silent' }
+      { logLevel: "silent" },
     );
-    
+
     if (remoteResult.success) {
-      remoteResult.output.forEach(line => console.log(`   ${line}`));
+      remoteResult.output.forEach((line) => console.log(`   ${line}`));
     } else {
       console.log("   Remote execution failed (URL may not exist yet)");
-      remoteResult.errors.forEach(error => console.log(`   ${error}`));
+      remoteResult.errors.forEach((error) => console.log(`   ${error}`));
     }
   } catch (error) {
     console.log("   Remote execution test skipped:", error.message);

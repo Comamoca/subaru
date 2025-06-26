@@ -17,7 +17,7 @@ async function debugCompile() {
   try {
     const subaru = new Subaru();
     const result = await subaru.compile(simpleCode);
-    
+
     if (result.success) {
       console.log("✅ Compilation successful!");
       console.log("\n📄 Generated JavaScript:");
@@ -26,12 +26,12 @@ async function debugCompile() {
       console.log(result.erlang);
     } else {
       console.log("❌ Compilation failed:");
-      result.errors.forEach(error => console.log(`   ${error}`));
+      result.errors.forEach((error) => console.log(`   ${error}`));
     }
-    
+
     if (result.warnings.length > 0) {
       console.log("\n⚠️  Warnings:");
-      result.warnings.forEach(warning => console.log(`   ${warning}`));
+      result.warnings.forEach((warning) => console.log(`   ${warning}`));
     }
   } catch (error) {
     console.error("❌ Error:", error.message);

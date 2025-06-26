@@ -25,10 +25,11 @@ async function downloadGleamWasm(): Promise<void> {
     await ensureDir(WASM_DIR);
 
     // Download URL
-    const downloadUrl = `https://github.com/gleam-lang/gleam/releases/download/v${GLEAM_VERSION}/gleam-v${GLEAM_VERSION}-browser.tar.gz`;
-    
+    const downloadUrl =
+      `https://github.com/gleam-lang/gleam/releases/download/v${GLEAM_VERSION}/gleam-v${GLEAM_VERSION}-browser.tar.gz`;
+
     console.log(`Downloading from: ${downloadUrl}`);
-    
+
     // Download the tar.gz file
     const response = await fetch(downloadUrl);
     if (!response.ok) {
@@ -50,7 +51,7 @@ async function downloadGleamWasm(): Promise<void> {
     });
 
     const extractResult = await extractProcess.output();
-    
+
     if (!extractResult.success) {
       const errorText = new TextDecoder().decode(extractResult.stderr);
       throw new Error(`Failed to extract: ${errorText}`);
@@ -61,7 +62,7 @@ async function downloadGleamWasm(): Promise<void> {
 
     console.log("✅ Gleam WASM compiler downloaded successfully!");
     console.log(`📁 Location: ${join(Deno.cwd(), WASM_DIR)}`);
-    
+
     // List extracted files
     console.log("📋 Files:");
     for await (const entry of Deno.readDir(WASM_DIR)) {
@@ -69,10 +70,9 @@ async function downloadGleamWasm(): Promise<void> {
       const size = entry.isFile ? ` (${(stat.size / 1024).toFixed(1)}KB)` : "";
       console.log(`  ${entry.isDirectory ? "📁" : "📄"} ${entry.name}${size}`);
     }
-
   } catch (error) {
     console.error("❌ Failed to download Gleam WASM compiler:");
-    console.error(error.message);
+    console.error(error instanceof Error ? error.message : String(error));
     Deno.exit(1);
   }
 }

@@ -22,7 +22,7 @@ export async function loadConfig(configPath?: string): Promise<SubaruConfig> {
     try {
       const configText = await Deno.readTextFile(path);
       const config: SubaruConfigFile = JSON.parse(configText);
-      
+
       // Validate and normalize config
       return normalizeConfig(config);
     } catch (error) {
@@ -50,7 +50,7 @@ function normalizeConfig(config: SubaruConfigFile): SubaruConfig {
 
   // Convert preloadScripts format
   if (config.preloadScripts) {
-    normalized.preloadScripts = config.preloadScripts.map(script => ({
+    normalized.preloadScripts = config.preloadScripts.map((script) => ({
       moduleName: script.moduleName,
       code: script.code || "",
       url: script.url,
@@ -61,7 +61,10 @@ function normalizeConfig(config: SubaruConfigFile): SubaruConfig {
   return normalized;
 }
 
-export async function saveConfig(config: SubaruConfigFile, configPath: string = "./subaru.config.json"): Promise<void> {
+export async function saveConfig(
+  config: SubaruConfigFile,
+  configPath: string = "./subaru.config.json",
+): Promise<void> {
   const configText = JSON.stringify(config, null, 2);
   await Deno.writeTextFile(configPath, configText);
 }
@@ -86,16 +89,16 @@ pub fn greet(name: String) -> String {
 pub fn add(a: Int, b: Int) -> Int {
   a + b
 }
-`
+`,
       },
       {
         moduleName: "remote_lib",
-        url: "https://example.com/my_gleam_lib.gleam"
+        url: "https://example.com/my_gleam_lib.gleam",
       },
       {
-        moduleName: "local_lib", 
-        filePath: "./libs/my_local_lib.gleam"
-      }
-    ]
+        moduleName: "local_lib",
+        filePath: "./libs/my_local_lib.gleam",
+      },
+    ],
   };
 }

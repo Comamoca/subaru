@@ -5,6 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project Overview
 
 This is "subaru" - a Gleam WASM runner that allows executing Gleam code dynamically using WebAssembly. The project uses:
+
 - **Gleam**: Main programming language (functional language that compiles to Erlang/JavaScript)
 - **Deno**: TypeScript/JavaScript runtime for the WASM runner
 - **WASM**: WebAssembly version of Gleam compiler for dynamic compilation
@@ -14,17 +15,20 @@ This is "subaru" - a Gleam WASM runner that allows executing Gleam code dynamica
 ## Development Commands
 
 ### Setup
+
 ```bash
 deno task setup     # Download Gleam WASM compiler
 ```
 
 ### Gleam Operations
+
 ```bash
 gleam run      # Run the main Gleam application
 gleam test     # Run Gleam tests using gleeunit
 ```
 
 ### WASM Runner Operations
+
 ```bash
 # CLI usage
 deno task cli --help                    # Show CLI help
@@ -49,6 +53,7 @@ deno task test                          # Run Deno tests
 ```
 
 ### Development Environment
+
 ```bash
 deno task dev        # Setup and run development environment
 # OR use Nix/direnv for reproducible environment:
@@ -57,10 +62,12 @@ direnv allow         # Auto-load development environment (if direnv is configure
 ```
 
 ### Code Quality
+
 ```bash
 deno task fmt            # Format TypeScript code
 deno task lint           # Lint TypeScript code
 deno task check          # Type check TypeScript code
+deno task test           # Run Deno tests
 deno task build-gleam    # Build Gleam project
 deno task run-gleam      # Run Gleam project
 deno task clean          # Clean generated files
@@ -68,13 +75,17 @@ nix run .#treefmt        # Format Nix code
 git secrets --scan       # Scan for secrets (pre-commit hook)
 ```
 
+**IMPORTANT**: Always run `deno fmt` and `deno test` during development before committing changes. These commands should be used frequently to catch formatting issues and test failures early.
+
 ## Project Structure
 
 ### Gleam Files
+
 - `src/subaru.gleam`: Main Gleam application entry point
 - `test/subaru_test.gleam`: Gleam test suite using gleeunit
 
 ### TypeScript/WASM Runner
+
 - `src/gleam_runner.ts`: Core WASM runner implementation
 - `src/subaru_runner.ts`: High-level API for Gleam code execution
 - `src/cli.ts`: Command-line interface for the runner
@@ -82,6 +93,7 @@ git secrets --scan       # Scan for secrets (pre-commit hook)
 - `examples/simple_usage.ts`: Usage examples
 
 ### Configuration & Scripts
+
 - `gleam.toml`: Gleam project configuration and dependencies
 - `deno.json`: Deno configuration and development task definitions
 - `flake.nix`: Nix development environment with custom Gleam build
@@ -117,10 +129,11 @@ deno task init-config  # Creates example config
 ```
 
 Example configuration:
+
 ```json
 {
   "debug": false,
-  "logLevel": "silent", 
+  "logLevel": "silent",
   "wasmPath": "./wasm-compiler",
   "preloadScripts": [
     {
@@ -142,6 +155,7 @@ Example configuration:
 ## Development Environment
 
 The project uses a Nix flake with devenv for reproducible development:
+
 - Custom-built Gleam 1.9.1 compiler
 - Pre-commit hooks for security scanning
 - Treefmt for code formatting
@@ -152,6 +166,7 @@ The project uses a Nix flake with devenv for reproducible development:
 This project follows [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) specification for consistent commit messages.
 
 ### Format
+
 ```
 <type>[optional scope]: <description>
 
@@ -161,6 +176,7 @@ This project follows [Conventional Commits](https://www.conventionalcommits.org/
 ```
 
 ### Types
+
 - `feat`: New feature
 - `fix`: Bug fix
 - `docs`: Documentation changes
@@ -173,6 +189,7 @@ This project follows [Conventional Commits](https://www.conventionalcommits.org/
 - `build`: Build system or external dependencies changes
 
 ### Examples
+
 ```
 feat(cli): add warning color customization options
 fix(wasm): resolve deprecated initialization API usage
@@ -182,7 +199,9 @@ chore: remove unused Gleam project files
 ```
 
 ### Breaking Changes
+
 Use `!` after type/scope or add `BREAKING CHANGE:` in footer:
+
 ```
 feat!: change CLI argument format
 feat(api)!: remove deprecated methods

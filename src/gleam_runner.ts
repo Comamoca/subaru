@@ -22,23 +22,23 @@ export interface PreloadScript {
 export interface GleamRunnerConfig {
   wasmPath?: string;
   debug?: boolean;
-  logLevel?: 'silent' | 'error' | 'warn' | 'info' | 'debug' | 'trace';
+  logLevel?: "silent" | "error" | "warn" | "info" | "debug" | "trace";
   preloadScripts?: PreloadScript[];
   noWarnings?: boolean;
-  warningColor?: 'red' | 'yellow' | 'green' | 'blue' | 'magenta' | 'cyan' | 'white' | 'gray';
+  warningColor?: "red" | "yellow" | "green" | "blue" | "magenta" | "cyan" | "white" | "gray";
 }
 
 // ANSI color codes
 const colors = {
-  red: '\x1b[31m',
-  yellow: '\x1b[33m',
-  green: '\x1b[32m',
-  blue: '\x1b[34m',
-  magenta: '\x1b[35m',
-  cyan: '\x1b[36m',
-  white: '\x1b[37m',
-  gray: '\x1b[90m',
-  reset: '\x1b[0m',
+  red: "\x1b[31m",
+  yellow: "\x1b[33m",
+  green: "\x1b[32m",
+  blue: "\x1b[34m",
+  magenta: "\x1b[35m",
+  cyan: "\x1b[36m",
+  white: "\x1b[37m",
+  gray: "\x1b[90m",
+  reset: "\x1b[0m",
 } as const;
 
 function colorize(text: string, color: keyof typeof colors): string {
@@ -47,7 +47,7 @@ function colorize(text: string, color: keyof typeof colors): string {
 
 export class GleamRunner {
   private wasmPath: string;
-  private wasmModule: any;
+  private wasmModule: unknown;
   private projectId: number = 0;
   private debug: boolean;
   private logLevel: string;
@@ -58,28 +58,28 @@ export class GleamRunner {
   constructor(config: GleamRunnerConfig = {}) {
     this.wasmPath = config.wasmPath || "./wasm-compiler";
     this.debug = config.debug || false;
-    this.logLevel = config.logLevel || 'silent';
+    this.logLevel = config.logLevel || "silent";
     this.preloadScripts = config.preloadScripts || [];
     this.noWarnings = config.noWarnings !== undefined ? config.noWarnings : true; // Default to true (suppress warnings)
-    this.warningColor = config.warningColor || 'yellow';
+    this.warningColor = config.warningColor || "yellow";
   }
 
   async initialize(): Promise<void> {
     try {
       // Set up logging filter to control debug output
       this.setupLogging();
-      
+
       // Import the WASM module
       const wasmModulePath = `file://${Deno.cwd()}/${this.wasmPath}/gleam_wasm.js`;
       const { default: init, initialise_panic_hook } = await import(wasmModulePath);
-      
+
       // Initialize with WASM file
       const wasmFile = await Deno.readFile(`${this.wasmPath}/gleam_wasm_bg.wasm`);
       this.wasmModule = await init({ module_or_path: wasmFile });
-      
+
       // Initialize panic hook for better error reporting
       initialise_panic_hook(this.debug);
-      
+
       if (this.debug) {
         console.log("Gleam WASM compiler initialized successfully");
       }
@@ -90,30 +90,34 @@ export class GleamRunner {
 
   private setupLogging(): void {
     // Filter only internal debug logs from WASM compiler, not user output
-    if (!this.debug && this.logLevel !== 'trace') {
+    if (!this.debug && this.logLevel !== "trace") {
       // Store original console methods
       const originalConsole = { ...console };
-      
+
       // Create filtered console that only affects WASM debug output
-      if (this.logLevel === 'silent') {
+      if (this.logLevel === "silent") {
         // Silence all internal logs but preserve user println output
-        const silentLog = (...args: any[]) => {
+        const silentLog = (...args: unknown[]) => {
           // Allow through only basic output, not TRACE/DEBUG/INFO prefixed logs
-          const message = args.join(' ');
-          if (!message.includes('TRACE ') && !message.includes('DEBUG ') && 
-              !message.includes('INFO ') && !message.includes('compiler-')) {
+          const message = args.join(" ");
+          if (
+            !message.includes("TRACE ") && !message.includes("DEBUG ") &&
+            !message.includes("INFO ") && !message.includes("compiler-")
+          ) {
             originalConsole.log(...args);
           }
         };
         console.log = silentLog;
         console.debug = () => {};
         console.info = () => {};
-      } else if (this.logLevel === 'error') {
+      } else if (this.logLevel === "error") {
         // Filter out TRACE, DEBUG, INFO but keep warnings and errors
-        const errorLog = (...args: any[]) => {
-          const message = args.join(' ');
-          if (!message.includes('TRACE ') && !message.includes('DEBUG ') && 
-              !message.includes('INFO ') && !message.includes('compiler-')) {
+        const errorLog = (...args: unknown[]) => {
+          const message = args.join(" ");
+          if (
+            !message.includes("TRACE ") && !message.includes("DEBUG ") &&
+            !message.includes("INFO ") && !message.includes("compiler-")
+          ) {
             originalConsole.log(...args);
           }
         };
@@ -121,17 +125,17 @@ export class GleamRunner {
         console.debug = () => {};
         console.info = () => {};
       }
-      
+
       // Store original console for restoration if needed
-      (globalThis as any).__originalConsole = originalConsole;
+      (globalThis as Record<string, unknown>).__originalConsole = originalConsole;
     }
   }
 
   private formatWarning(warning: string): string {
     if (this.noWarnings) {
-      return ''; // Return empty string for suppressed warnings
+      return ""; // Return empty string for suppressed warnings
     }
-    
+
     const color = this.warningColor as keyof typeof colors;
     return colorize(`Warning: ${warning}`, color);
   }
@@ -140,8 +144,8 @@ export class GleamRunner {
     if (this.noWarnings) {
       return; // Don't display warnings if suppressed
     }
-    
-    warnings.forEach(warning => {
+
+    warnings.forEach((warning) => {
       const formattedWarning = this.formatWarning(warning);
       if (formattedWarning) {
         console.warn(formattedWarning);
@@ -156,29 +160,29 @@ export class GleamRunner {
 
     try {
       // Import the functions we need
-      const { 
-        reset_filesystem, 
-        write_module, 
-        compile_package, 
-        read_compiled_javascript, 
+      const {
+        reset_filesystem,
+        write_module,
+        compile_package,
+        read_compiled_javascript,
         read_compiled_erlang,
         pop_warning,
-        reset_warnings
+        reset_warnings,
       } = await import(`file://${Deno.cwd()}/${this.wasmPath}/gleam_wasm.js`);
-      
+
       // Reset filesystem and warnings
       reset_filesystem(this.projectId);
       reset_warnings(this.projectId);
-      
+
       // Add standard library modules first
       await this.addStandardLibrary();
-      
+
       // Add preload scripts
       await this.addPreloadScripts();
-      
+
       // Write the Gleam code to a module (write_module automatically adds .gleam extension)
       write_module(this.projectId, moduleName, gleamCode);
-      
+
       // Write a basic gleam.toml
       const gleamToml = `name = "${moduleName}"
 version = "1.0.0"
@@ -188,27 +192,27 @@ gleam_stdlib = ">= 0.40.0 and < 2.0.0"
 `;
       const { write_file } = await import(`file://${Deno.cwd()}/${this.wasmPath}/gleam_wasm.js`);
       write_file(this.projectId, "gleam.toml", gleamToml);
-      
+
       const warnings: string[] = [];
       const errors: string[] = [];
-      
+
       try {
         // Compile to JavaScript target
         compile_package(this.projectId, "javascript");
-        
+
         // Collect warnings
         let warning;
         while ((warning = pop_warning(this.projectId)) !== undefined) {
           warnings.push(warning);
         }
-        
+
         // Display warnings with color formatting (unless suppressed)
         this.displayWarnings(warnings);
-        
+
         // Read compiled output
         const javascript = read_compiled_javascript(this.projectId, moduleName);
         const erlang = read_compiled_erlang(this.projectId, moduleName);
-        
+
         return {
           success: true,
           javascript: javascript || undefined,
@@ -222,10 +226,10 @@ gleam_stdlib = ">= 0.40.0 and < 2.0.0"
         while ((warning = pop_warning(this.projectId)) !== undefined) {
           warnings.push(warning);
         }
-        
+
         // Display warnings even on compilation failure (unless suppressed)
         this.displayWarnings(warnings);
-        
+
         errors.push(`Compilation failed: ${compileError}`);
         return {
           success: false,
@@ -244,7 +248,7 @@ gleam_stdlib = ">= 0.40.0 and < 2.0.0"
 
   async run(gleamCode: string, moduleName: string = "main"): Promise<RunResult> {
     const compileResult = await this.compile(gleamCode, moduleName);
-    
+
     if (!compileResult.success) {
       return {
         success: false,
@@ -264,23 +268,23 @@ gleam_stdlib = ">= 0.40.0 and < 2.0.0"
     }
   }
 
-  private async executeJavaScript(jsCode: string): Promise<RunResult> {
+  private executeJavaScript(jsCode: string): RunResult {
     const output: string[] = [];
-    const errors: string[] = [];
+    const _errors: string[] = [];
 
     try {
       // Simple execution without Worker for now - just simulate the execution
       // This is a simplified version that doesn't actually run the JS
       // but shows that compilation was successful
-      
+
       // Extract all function calls from the generated code
-      if (jsCode.includes('println')) {
+      if (jsCode.includes("println")) {
         const matches = jsCode.matchAll(/\$io\.println\("([^"]+)"\)/g);
         for (const match of matches) {
           output.push(match[1]);
         }
       }
-      
+
       return {
         success: true,
         output: output.length > 0 ? output : ["Hello from Gleam via WASM!"],
@@ -298,7 +302,7 @@ gleam_stdlib = ">= 0.40.0 and < 2.0.0"
   private async addStandardLibrary(): Promise<void> {
     // Import write_module function
     const { write_module } = await import(`file://${Deno.cwd()}/${this.wasmPath}/gleam_wasm.js`);
-    
+
     // Add basic gleam/io module - minimal implementation for testing
     const gleamIo = `
 // Basic gleam/io module implementation
@@ -331,7 +335,9 @@ pub fn debug(value: a) -> a
         try {
           const response = await fetch(script.url);
           if (!response.ok) {
-            throw new Error(`Failed to fetch ${script.url}: ${response.status} ${response.statusText}`);
+            throw new Error(
+              `Failed to fetch ${script.url}: ${response.status} ${response.statusText}`,
+            );
           }
           code = await response.text();
         } catch (error) {
@@ -356,7 +362,7 @@ pub fn debug(value: a) -> a
 
       // Write the module
       write_module(this.projectId, script.moduleName, code);
-      
+
       if (this.debug) {
         console.log(`Preloaded module: ${script.moduleName}`);
       }

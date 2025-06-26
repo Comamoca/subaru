@@ -2,7 +2,7 @@
 
 import { parseArgs } from "https://deno.land/std@0.218.0/cli/parse_args.ts";
 import Subaru from "./subaru_runner.ts";
-import { loadConfig, createExampleConfig, saveConfig } from "./config.ts";
+import { createExampleConfig, loadConfig, saveConfig, type SubaruConfigFile } from "./config.ts";
 
 interface CliOptions {
   help: boolean;
@@ -19,6 +19,7 @@ interface CliOptions {
   "no-warnings"?: boolean;
   "show-warnings"?: boolean;
   "warning-color"?: string;
+  _: string[];
 }
 
 const VERSION = "1.0.0";
@@ -69,20 +70,23 @@ EXAMPLES:
     subaru --config my-config.json script.gleam
 `;
 
-async function runFromFile(filePath: string, config: any): Promise<void> {
+async function runFromFile(filePath: string, config: SubaruConfigFile): Promise<void> {
   try {
     const code = await Deno.readTextFile(filePath);
     await runCode(code, config);
   } catch (error) {
-    console.error(`Error reading file ${filePath}:`, error.message);
+    console.error(
+      `Error reading file ${filePath}:`,
+      error instanceof Error ? error.message : String(error),
+    );
     Deno.exit(1);
   }
 }
 
-async function runFromUrl(url: string, config: any): Promise<void> {
+async function runFromUrl(url: string, config: SubaruConfigFile): Promise<void> {
   try {
     const subaru = new Subaru(config);
-    
+
     if (config.compile) {
       // Fetch and compile only
       const response = await fetch(url);
@@ -91,9 +95,9 @@ async function runFromUrl(url: string, config: any): Promise<void> {
         Deno.exit(1);
       }
       const code = await response.text();
-      
+
       const result = await subaru.compile(code);
-      
+
       if (result.success) {
         console.log("Compilation successful!");
         if (result.javascript) {
@@ -107,34 +111,34 @@ async function runFromUrl(url: string, config: any): Promise<void> {
         // Warnings are already displayed by the GleamRunner
       } else {
         console.error("Compilation failed:");
-        result.errors.forEach(error => console.error(`  ${error}`));
+        result.errors.forEach((error) => console.error(`  ${error}`));
         // Warnings are already displayed by the GleamRunner, even on failure
         Deno.exit(1);
       }
     } else {
       const result = await subaru.executeFromUrl(url);
-      
+
       if (result.success) {
-        result.output.forEach(line => console.log(line));
+        result.output.forEach((line) => console.log(line));
       } else {
         console.error("Execution failed:");
-        result.errors.forEach(error => console.error(`  ${error}`));
+        result.errors.forEach((error) => console.error(`  ${error}`));
         Deno.exit(1);
       }
     }
   } catch (error) {
-    console.error("Error:", error.message);
+    console.error("Error:", error instanceof Error ? error.message : String(error));
     Deno.exit(1);
   }
 }
 
-async function runCode(code: string, config: any): Promise<void> {
+async function runCode(code: string, config: SubaruConfigFile): Promise<void> {
   try {
     const subaru = new Subaru(config);
-    
+
     if (config.compile) {
       const result = await subaru.compile(code);
-      
+
       if (result.success) {
         console.log("Compilation successful!");
         if (result.javascript) {
@@ -148,23 +152,23 @@ async function runCode(code: string, config: any): Promise<void> {
         // Warnings are already displayed by the GleamRunner
       } else {
         console.error("Compilation failed:");
-        result.errors.forEach(error => console.error(`  ${error}`));
+        result.errors.forEach((error) => console.error(`  ${error}`));
         // Warnings are already displayed by the GleamRunner, even on failure
         Deno.exit(1);
       }
     } else {
       const result = await subaru.execute(code);
-      
+
       if (result.success) {
-        result.output.forEach(line => console.log(line));
+        result.output.forEach((line) => console.log(line));
       } else {
         console.error("Execution failed:");
-        result.errors.forEach(error => console.error(`  ${error}`));
+        result.errors.forEach((error) => console.error(`  ${error}`));
         Deno.exit(1);
       }
     }
   } catch (error) {
-    console.error("Error:", error.message);
+    console.error("Error:", error instanceof Error ? error.message : String(error));
     Deno.exit(1);
   }
 }
@@ -200,17 +204,23 @@ async function main(): Promise<void> {
       console.log("Edit the file to customize preload scripts and other settings.");
       return;
     } catch (error) {
-      console.error("❌ Failed to create config file:", error.message);
+      console.error(
+        "❌ Failed to create config file:",
+        error instanceof Error ? error.message : String(error),
+      );
       Deno.exit(1);
     }
   }
 
   // Load config file
-  let fileConfig = {};
+  let fileConfig: SubaruConfigFile = {};
   try {
     fileConfig = await loadConfig(args.config);
   } catch (error) {
-    console.error("❌ Failed to load config file:", error.message);
+    console.error(
+      "❌ Failed to load config file:",
+      error instanceof Error ? error.message : String(error),
+    );
     Deno.exit(1);
   }
 
@@ -219,16 +229,19 @@ async function main(): Promise<void> {
     ...fileConfig,
     wasmPath: args["wasm-path"] || fileConfig.wasmPath,
     debug: args.debug !== undefined ? args.debug : fileConfig.debug,
-    logLevel: (args["log-level"] || fileConfig.logLevel) as any,
+    logLevel: args["log-level"] || fileConfig.logLevel || "silent",
     compile: args.compile,
-    noWarnings: args["show-warnings"] ? false : (args["no-warnings"] ? true : (fileConfig.noWarnings !== undefined ? fileConfig.noWarnings : true)),
+    noWarnings: args["show-warnings"]
+      ? false
+      : (args["no-warnings"]
+        ? true
+        : (fileConfig.noWarnings !== undefined ? fileConfig.noWarnings : true)),
     warningColor: args["warning-color"] || fileConfig.warningColor || "yellow",
   };
 
-
   // Check for positional arguments (file paths)
   const positionalArgs = args._ as string[];
-  
+
   if (args.file) {
     await runFromFile(args.file, config);
   } else if (args.code) {
@@ -238,9 +251,9 @@ async function main(): Promise<void> {
   } else if (positionalArgs.length > 0) {
     // Handle positional file argument
     const filePath = positionalArgs[0];
-    
+
     // Check if it looks like a Gleam file or just treat as file
-    if (filePath.endsWith('.gleam') || await fileExists(filePath)) {
+    if (filePath.endsWith(".gleam") || await fileExists(filePath)) {
       await runFromFile(filePath, config);
     } else {
       console.error(`File not found: ${filePath}`);

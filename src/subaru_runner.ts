@@ -1,5 +1,5 @@
 import { GleamRunner } from "./gleam_runner.ts";
-import type { CompileResult, RunResult, GleamRunnerConfig } from "./gleam_runner.ts";
+import type { CompileResult, GleamRunnerConfig, RunResult } from "./gleam_runner.ts";
 
 export interface SubaruConfig extends GleamRunnerConfig {
   timeout?: number;
@@ -15,7 +15,7 @@ export class Subaru {
 
   async init(): Promise<void> {
     if (this.initialized) return;
-    
+
     await this.runner.initialize();
     this.initialized = true;
   }
@@ -24,7 +24,7 @@ export class Subaru {
     if (!this.initialized) {
       await this.init();
     }
-    
+
     return await this.runner.run(gleamCode);
   }
 
@@ -32,7 +32,7 @@ export class Subaru {
     if (!this.initialized) {
       await this.init();
     }
-    
+
     return await this.runner.compile(gleamCode);
   }
 
@@ -40,7 +40,7 @@ export class Subaru {
     if (!this.initialized) {
       await this.init();
     }
-    
+
     try {
       const response = await fetch(url);
       if (!response.ok) {
@@ -50,7 +50,7 @@ export class Subaru {
           errors: [`Failed to fetch ${url}: ${response.status} ${response.statusText}`],
         };
       }
-      
+
       const gleamCode = await response.text();
       return await this.execute(gleamCode);
     } catch (error) {

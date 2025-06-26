@@ -33,41 +33,40 @@ async function runExamples() {
     console.log("\\n1. Simple Hello World");
     console.log("---------------------");
     const result1 = await Subaru.run(gleamCode);
-    
+
     if (result1.success) {
       console.log("✅ Success!");
-      result1.output.forEach(line => console.log(`   ${line}`));
+      result1.output.forEach((line) => console.log(`   ${line}`));
     } else {
       console.log("❌ Failed:");
-      result1.errors.forEach(error => console.log(`   ${error}`));
+      result1.errors.forEach((error) => console.log(`   ${error}`));
     }
 
     console.log("\\n2. Math Operations");
     console.log("------------------");
     const result2 = await Subaru.run(mathCode);
-    
+
     if (result2.success) {
       console.log("✅ Success!");
-      result2.output.forEach(line => console.log(`   ${line}`));
+      result2.output.forEach((line) => console.log(`   ${line}`));
     } else {
       console.log("❌ Failed:");
-      result2.errors.forEach(error => console.log(`   ${error}`));
+      result2.errors.forEach((error) => console.log(`   ${error}`));
     }
 
     console.log("\\n3. Compilation Only");
     console.log("-------------------");
     const subaru = new Subaru();
     const compileResult = await subaru.compile(gleamCode);
-    
+
     if (compileResult.success) {
       console.log("✅ Compilation successful!");
       console.log("   JavaScript code generated (truncated):");
       console.log(`   ${compileResult.javascript?.substring(0, 100)}...`);
     } else {
       console.log("❌ Compilation failed:");
-      compileResult.errors.forEach(error => console.log(`   ${error}`));
+      compileResult.errors.forEach((error) => console.log(`   ${error}`));
     }
-
   } catch (error) {
     console.error("\\n❌ Error running examples:", error.message);
     console.log("\\n💡 Make sure to download the WASM compiler first:");

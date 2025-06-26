@@ -23,7 +23,7 @@ async function testPreloadScripts() {
 
   const config = {
     debug: true,
-    logLevel: 'silent' as const,
+    logLevel: "silent" as const,
     preloadScripts: [
       {
         moduleName: "my_utils",
@@ -45,20 +45,20 @@ pub fn add(a: Int, b: Int) -> Int {
 @external(javascript, "globalThis", "String")
 pub fn to_string(value: Int) -> String
 `,
-      }
+      },
     ],
   };
 
   try {
     console.log("\n📦 Running with preloaded modules...");
     const result = await Subaru.run(mainCode, config);
-    
+
     if (result.success) {
       console.log("✅ Success!");
-      result.output.forEach(line => console.log(`   ${line}`));
+      result.output.forEach((line) => console.log(`   ${line}`));
     } else {
       console.log("❌ Failed:");
-      result.errors.forEach(error => console.log(`   ${error}`));
+      result.errors.forEach((error) => console.log(`   ${error}`));
     }
   } catch (error) {
     console.error("❌ Error:", error.message);
