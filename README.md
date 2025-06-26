@@ -96,20 +96,6 @@ deno task setup
 deno task cli --help
 ```
 
-### As Gleam Package
-
-```sh
-gleam add subaru@1
-```
-
-```gleam
-import subaru
-
-pub fn main() {
-  // Use subaru functions here
-}
-```
-
 ### From Source
 
 ```sh
