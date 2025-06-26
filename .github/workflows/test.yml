@@ -8,7 +8,7 @@ on:
   pull_request:
 
 jobs:
-  test:
+  gleam-test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,7 +17,19 @@ jobs:
           otp-version: "27.1.2"
           gleam-version: "1.9.1"
           rebar3-version: "3"
-          # elixir-version: "1"
       - run: gleam deps download
       - run: gleam test
       - run: gleam format --check src test
+
+  deno-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - run: deno task setup
+      - run: deno task test
+      - run: deno task check
+      - run: deno task fmt --check
+      - run: deno task lint
