@@ -1,0 +1,8 @@
+{
+  "version": "5",
+  "remote": {
+    "https://deno.land/std@0.218.0/assert/assert.ts": "bec068b2fccdd434c138a555b19a2c2393b71dfaada02b7d568a01541e67cdc5",
+    "https://deno.land/std@0.218.0/assert/assertion_error.ts": "9f689a101ee586c4ce92f52fa7ddd362e86434ffdf1f848e45987dc7689976b8",
+    "https://deno.land/std@0.218.0/cli/parse_args.ts": "df284f03f8ef4c581c17ca12db41cc17bcf0fa2ab6a8e09dbb72fa05916d4427"
+  }
+}
