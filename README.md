@@ -20,11 +20,9 @@ A Gleam WASM runner that allows executing Gleam code dynamically using WebAssemb
 
 <div align="center">
 
+<img src="./assets/quote.jpg" alt="Quote" width="50%">
+
 </div>
-
-> To become popular, a programming language has to be the scripting language of a popular system.
-
-<div align="right">────── Paul Graham</div>
 
 ## 🚀 How to use
 
