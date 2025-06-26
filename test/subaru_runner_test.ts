@@ -38,7 +38,7 @@ Deno.test("Subaru initialization", async () => {
     await subaru.init();
   } catch (error) {
     // If WASM files are not available, test should be skipped
-    console.warn("Skipping test - WASM compiler not available:", error.message);
+    console.warn("Skipping test - WASM compiler not available:", error instanceof Error ? error.message : String(error));
     return;
   }
 });
@@ -57,7 +57,7 @@ Deno.test("Simple Gleam code execution", async () => {
       console.warn("Execution failed - likely due to missing WASM setup");
     }
   } catch (error) {
-    console.warn("Skipping test - WASM compiler not available:", error.message);
+    console.warn("Skipping test - WASM compiler not available:", error instanceof Error ? error.message : String(error));
   }
 });
 
@@ -71,7 +71,7 @@ Deno.test("Invalid Gleam code handling", async () => {
     assertEquals(result.success, false);
     assertExists(result.errors);
   } catch (error) {
-    console.warn("Skipping test - WASM compiler not available:", error.message);
+    console.warn("Skipping test - WASM compiler not available:", error instanceof Error ? error.message : String(error));
   }
 });
 
@@ -88,7 +88,7 @@ Deno.test("Compile-only mode", async () => {
       console.warn("Compilation failed - likely due to missing WASM setup");
     }
   } catch (error) {
-    console.warn("Skipping test - WASM compiler not available:", error.message);
+    console.warn("Skipping test - WASM compiler not available:", error instanceof Error ? error.message : String(error));
   }
 });
 
@@ -102,6 +102,6 @@ Deno.test("Static run method", async () => {
       console.warn("Static run failed - likely due to missing WASM setup");
     }
   } catch (error) {
-    console.warn("Skipping test - WASM compiler not available:", error.message);
+    console.warn("Skipping test - WASM compiler not available:", error instanceof Error ? error.message : String(error));
   }
 });
