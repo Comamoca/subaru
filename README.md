@@ -48,6 +48,8 @@ subaru --url https://example.com/script.gleam
 - Dynamic compilation using Gleam's WebAssembly compiler
 - Worker-based execution for safe code isolation
 - Configurable logging and debug output
+- **Preloaded Standard Libraries** - Automatic access to essential Gleam modules
+- **Echo Keyword Support** - Full support for Gleam v1.11.0's debugging features
 
 ## ⬇️ Install
 
@@ -138,6 +140,39 @@ deno task lint       # Lint code
 deno task check      # Type check
 ```
 
+### Preloaded Libraries Usage Example
+
+All these libraries are automatically available without imports:
+
+```gleam
+import gleam/io
+import gleam/list
+import gleam/string
+import gleam/int
+import gleam/result
+
+pub fn main() {
+  // List operations
+  [1, 2, 3, 4, 5]
+  |> list.map(fn(x) { x * 2 })
+  |> echo  // [2, 4, 6, 8, 10]
+  |> list.filter(fn(x) { x > 5 })
+  |> echo  // [6, 8, 10]
+  
+  // String operations
+  "Hello, Gleam!"
+  |> string.uppercase()
+  |> io.println()  // HELLO, GLEAM!
+  
+  // Result operations
+  let result = case int.parse("42") {
+    Ok(num) -> "Parsed: " <> int.to_string(num)
+    Error(_) -> "Parse failed"
+  }
+  io.println(result)  // Parsed: 42
+}
+```
+
 ## 📝 Todo
 
 - [ ] Add more comprehensive error handling
@@ -162,9 +197,34 @@ This project is open source and available under the MIT License.
 - **Deno Standard Library** - File system, path utilities, testing
 - **Gleam WASM Compiler** - Dynamic Gleam compilation to JavaScript
 
-#### Gleam Dependencies
+#### Preloaded Gleam Libraries
 
-- **gleam_stdlib** - Standard library functions for Gleam
+**Gleam Standard Library (automatic)**
+
+- `gleam/io` - Input/output operations (println, debug)
+- `gleam/list` - List manipulation (map, filter, fold, etc.)
+- `gleam/string` - String operations (uppercase, lowercase, split)
+- `gleam/string_tree` - String tree operations (dependency for string)
+- `gleam/int` - Integer operations (compare, to_string, arithmetic)
+- `gleam/float` - Floating point operations
+- `gleam/bool` - Boolean operations and logic
+- `gleam/result` - Result type operations (Ok/Error handling)
+- `gleam/option` - Option type operations (Some/None handling)
+- `gleam/order` - Ordering operations (Lt/Eq/Gt)
+- `gleam/bit_array` - Bit array operations
+- `gleam/dict` - Dictionary/map operations
+- `gleam/set` - Set operations
+- `gleam/uri` - URI parsing and manipulation
+- `gleam/dynamic` - Dynamic type operations
+- `gleam/function` - Function utilities
+
+**Gleam JavaScript Interop (automatic)**
+
+- `gleam/javascript/array` - JavaScript array interop
+- `gleam/javascript/promise` - JavaScript promise interop
+
+**Development Dependencies**
+
 - **gleeunit** - Testing framework for Gleam projects
 
 #### Development Environment
