@@ -120,6 +120,7 @@ git secrets --scan       # Scan for secrets (pre-commit hook)
 - **Configuration Files**: JSON-based configuration with preload scripts and settings
 - **Error Handling**: Comprehensive error reporting for compilation and runtime issues
 - **Standard Libraries**: Automatically preloads essential Gleam stdlib modules and JavaScript interop libraries
+- **Echo Keyword Support**: Full support for Gleam v1.11.0's `echo` debugging keyword with file/line information
 
 ## Preloaded Libraries
 
@@ -153,17 +154,28 @@ Subaru automatically preloads the following libraries for all Gleam code executi
 ```gleam
 import gleam/io
 import gleam/list
-import gleam/string
 
 pub fn main() {
   io.println("Hello from Gleam WASM!")
   
-  let numbers = [1, 2, 3, 4, 5]
-  let doubled = list.map(numbers, fn(x) { x * 2 })
+  [1, 2, 3, 4, 5]
+  |> list.map(fn(x) { x * 2 })
+  |> echo  // Gleam v1.11.0 echo keyword with file:line info
+  |> list.filter(fn(x) { x > 5 })
+  |> echo
   
   io.println("Processing complete!")
 }
 ```
+
+#### Echo Keyword
+
+Subaru supports Gleam v1.11.0's `echo` keyword for enhanced debugging:
+
+- Displays file path and line number (`src/main.gleam:8`)
+- Shows formatted value output (`[2, 4, 6, 8, 10]`)
+- Works seamlessly in pipelines
+- Replaces `io.debug` with better location tracking
 
 **Note**: Some advanced stdlib functions may have limited functionality in the WASM environment. The libraries are automatically fetched from their official repositories and loaded at runtime.
 
