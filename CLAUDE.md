@@ -146,3 +146,44 @@ The project uses a Nix flake with devenv for reproducible development:
 - Pre-commit hooks for security scanning
 - Treefmt for code formatting
 - Development shell with necessary tools
+
+## Commit Guidelines
+
+This project follows [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) specification for consistent commit messages.
+
+### Format
+```
+<type>[optional scope]: <description>
+
+[optional body]
+
+[optional footer(s)]
+```
+
+### Types
+- `feat`: New feature
+- `fix`: Bug fix
+- `docs`: Documentation changes
+- `style`: Code formatting, semicolons, etc. (no functional changes)
+- `refactor`: Code refactoring
+- `perf`: Performance improvements
+- `test`: Adding or modifying tests
+- `chore`: Build process, auxiliary tools, etc.
+- `ci`: CI configuration changes
+- `build`: Build system or external dependencies changes
+
+### Examples
+```
+feat(cli): add warning color customization options
+fix(wasm): resolve deprecated initialization API usage
+docs(readme): update installation methods with deno install
+ci: migrate from Gleam to Deno-only workflow
+chore: remove unused Gleam project files
+```
+
+### Breaking Changes
+Use `!` after type/scope or add `BREAKING CHANGE:` in footer:
+```
+feat!: change CLI argument format
+feat(api)!: remove deprecated methods
+```
