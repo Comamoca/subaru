@@ -1,0 +1,15 @@
+﻿2025-06-26T12:45:00.3096816Z ##[group]Run gleam deps download
+2025-06-26T12:45:00.3097208Z [36;1mgleam deps download[0m
+2025-06-26T12:45:00.3167096Z shell: /usr/bin/bash -e {0}
+2025-06-26T12:45:00.3167371Z env:
+2025-06-26T12:45:00.3167628Z   INSTALL_DIR_FOR_OTP: /home/runner/work/_temp/.setup-beam/otp
+2025-06-26T12:45:00.3168054Z   INSTALL_DIR_FOR_GLEAM: /home/runner/work/_temp/.setup-beam/gleam
+2025-06-26T12:45:00.3168482Z   INSTALL_DIR_FOR_REBAR3: /home/runner/work/_temp/.setup-beam/rebar3
+2025-06-26T12:45:00.3168837Z ##[endgroup]
+2025-06-26T12:45:00.3297365Z error: Project not found
+2025-06-26T12:45:00.3297641Z 
+2025-06-26T12:45:00.3297788Z We were unable to find gleam.toml.
+2025-06-26T12:45:00.3298116Z 
+2025-06-26T12:45:00.3298390Z We searched in /home/runner/work/subaru/subaru and all parent directories.
+2025-06-26T12:45:00.3298708Z 
+2025-06-26T12:45:00.3313347Z ##[error]Process completed with exit code 1.

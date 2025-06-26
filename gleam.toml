@@ -1,8 +1,0 @@
-name = "subaru"
-version = "1.0.0"
-
-[dependencies]
-gleam_stdlib = ">= 0.40.0 and < 2.0.0"
-
-[dev-dependencies]
-gleeunit = ">= 1.0.0 and < 2.0.0"

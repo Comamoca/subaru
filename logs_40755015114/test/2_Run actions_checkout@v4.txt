@@ -1,0 +1,67 @@
+﻿2025-06-26T12:44:53.5985786Z ##[group]Run actions/checkout@v4
+2025-06-26T12:44:53.5986813Z with:
+2025-06-26T12:44:53.5987202Z   repository: Comamoca/subaru
+2025-06-26T12:44:53.5987811Z   token: ***
+2025-06-26T12:44:53.5988170Z   ssh-strict: true
+2025-06-26T12:44:53.5988555Z   ssh-user: git
+2025-06-26T12:44:53.5988937Z   persist-credentials: true
+2025-06-26T12:44:53.5989377Z   clean: true
+2025-06-26T12:44:53.5989760Z   sparse-checkout-cone-mode: true
+2025-06-26T12:44:53.5990223Z   fetch-depth: 1
+2025-06-26T12:44:53.5990601Z   fetch-tags: false
+2025-06-26T12:44:53.5990979Z   show-progress: true
+2025-06-26T12:44:53.5991372Z   lfs: false
+2025-06-26T12:44:53.5991720Z   submodules: false
+2025-06-26T12:44:53.5992108Z   set-safe-directory: true
+2025-06-26T12:44:53.5992723Z ##[endgroup]
+2025-06-26T12:44:53.7148242Z Syncing repository: Comamoca/subaru
+2025-06-26T12:44:53.7149920Z ##[group]Getting Git version info
+2025-06-26T12:44:53.7150579Z Working directory is '/home/runner/work/subaru/subaru'
+2025-06-26T12:44:53.7151510Z [command]/usr/bin/git version
+2025-06-26T12:44:53.7257823Z git version 2.49.0
+2025-06-26T12:44:53.7284365Z ##[endgroup]
+2025-06-26T12:44:53.7300638Z Temporarily overriding HOME='/home/runner/work/_temp/a43decbd-1e52-46d5-979c-dc82a49fe2ad' before making global git config changes
+2025-06-26T12:44:53.7303051Z Adding repository directory to the temporary git global config as a safe directory
+2025-06-26T12:44:53.7315283Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/subaru/subaru
+2025-06-26T12:44:53.7352527Z Deleting the contents of '/home/runner/work/subaru/subaru'
+2025-06-26T12:44:53.7356630Z ##[group]Initializing the repository
+2025-06-26T12:44:53.7361192Z [command]/usr/bin/git init /home/runner/work/subaru/subaru
+2025-06-26T12:44:53.7441035Z hint: Using 'master' as the name for the initial branch. This default branch name
+2025-06-26T12:44:53.7442374Z hint: is subject to change. To configure the initial branch name to use in all
+2025-06-26T12:44:53.7443277Z hint: of your new repositories, which will suppress this warning, call:
+2025-06-26T12:44:53.7444229Z hint:
+2025-06-26T12:44:53.7444687Z hint: 	git config --global init.defaultBranch <name>
+2025-06-26T12:44:53.7445241Z hint:
+2025-06-26T12:44:53.7445759Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2025-06-26T12:44:53.7446862Z hint: 'development'. The just-created branch can be renamed via this command:
+2025-06-26T12:44:53.7447556Z hint:
+2025-06-26T12:44:53.7447938Z hint: 	git branch -m <name>
+2025-06-26T12:44:53.7449752Z Initialized empty Git repository in /home/runner/work/subaru/subaru/.git/
+2025-06-26T12:44:53.7461536Z [command]/usr/bin/git remote add origin https://github.com/Comamoca/subaru
+2025-06-26T12:44:53.7497070Z ##[endgroup]
+2025-06-26T12:44:53.7498256Z ##[group]Disabling automatic garbage collection
+2025-06-26T12:44:53.7502015Z [command]/usr/bin/git config --local gc.auto 0
+2025-06-26T12:44:53.7532274Z ##[endgroup]
+2025-06-26T12:44:53.7533289Z ##[group]Setting up auth
+2025-06-26T12:44:53.7538660Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2025-06-26T12:44:53.7567684Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2025-06-26T12:44:53.7887671Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2025-06-26T12:44:53.7915284Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2025-06-26T12:44:53.8142015Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2025-06-26T12:44:53.8182116Z ##[endgroup]
+2025-06-26T12:44:53.8205705Z ##[group]Fetching the repository
+2025-06-26T12:44:53.8207430Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +21b8cb570f7e6de5dfabf9c324daa5b68393196a:refs/remotes/origin/main
+2025-06-26T12:44:54.2810165Z From https://github.com/Comamoca/subaru
+2025-06-26T12:44:54.2811941Z  * [new ref]         21b8cb570f7e6de5dfabf9c324daa5b68393196a -> origin/main
+2025-06-26T12:44:54.2840464Z ##[endgroup]
+2025-06-26T12:44:54.2843113Z ##[group]Determining the checkout info
+2025-06-26T12:44:54.2844534Z ##[endgroup]
+2025-06-26T12:44:54.2848761Z [command]/usr/bin/git sparse-checkout disable
+2025-06-26T12:44:54.2892461Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2025-06-26T12:44:54.2922526Z ##[group]Checking out the ref
+2025-06-26T12:44:54.2925465Z [command]/usr/bin/git checkout --progress --force -B main refs/remotes/origin/main
+2025-06-26T12:44:54.2993381Z Switched to a new branch 'main'
+2025-06-26T12:44:54.2997142Z branch 'main' set up to track 'origin/main'.
+2025-06-26T12:44:54.3002977Z ##[endgroup]
+2025-06-26T12:44:54.3036200Z [command]/usr/bin/git log -1 --format=%H
+2025-06-26T12:44:54.3057899Z 21b8cb570f7e6de5dfabf9c324daa5b68393196a
