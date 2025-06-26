@@ -23,7 +23,8 @@ A Gleam WASM runner that allows executing Gleam code dynamically using WebAssemb
 </div>
 
 > To become popular, a programming language has to be the scripting language of a popular system.
-> — Paul Graham
+
+<div align="right">────── Paul Graham</div>
 
 ## 🚀 How to use
 
