@@ -44,6 +44,8 @@ function normalizeConfig(config: SubaruConfigFile): SubaruConfig {
     debug: config.debug,
     logLevel: config.logLevel,
     timeout: config.timeout,
+    noWarnings: config.noWarnings,
+    warningColor: config.warningColor,
   };
 
   // Convert preloadScripts format
@@ -70,6 +72,8 @@ export function createExampleConfig(): SubaruConfigFile {
     debug: false,
     logLevel: "silent",
     wasmPath: "./wasm-compiler",
+    noWarnings: true,
+    warningColor: "yellow",
     preloadScripts: [
       {
         moduleName: "my_utils",

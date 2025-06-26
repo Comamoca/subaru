@@ -22,18 +22,27 @@ A Gleam WASM runner that allows executing Gleam code dynamically using WebAssemb
 
 </div>
 
+> To become popular, a programming language has to be the scripting language of a popular system.
+> — Paul Graham
+
 ## 🚀 How to use
 
 ```sh
-# Execute Gleam file directly
-deno task cli example.gleam
+# Using installed version (after deno install)
+subaru example.gleam
+subaru --code 'import gleam/io
+pub fn main() { io.println("Hello from WASM!") }'
 
-# Execute code from string
+# Using direct URL execution
+deno run --allow-all https://github.com/Comamoca/subaru/raw/main/src/cli.ts example.gleam
+
+# Using local development version
+deno task cli example.gleam
 deno task cli --code 'import gleam/io
 pub fn main() { io.println("Hello from WASM!") }'
 
 # Execute remote script
-deno task cli --url https://example.com/script.gleam
+subaru --url https://example.com/script.gleam
 ```
 
 - Execute Gleam files directly without compilation
@@ -48,7 +57,29 @@ deno task cli --url https://example.com/script.gleam
 - [Deno](https://deno.land/) - Modern runtime for JavaScript and TypeScript
 - [Gleam](https://gleam.run/) - For local Gleam development (optional)
 
-### From GitHub
+### Using deno install (Recommended)
+```sh
+# Install globally
+deno install --allow-all -n subaru https://github.com/Comamoca/subaru/raw/main/src/cli.ts
+
+# Run from anywhere
+subaru --help
+subaru example.gleam
+subaru --code 'import gleam/io
+pub fn main() { io.println("Hello!") }'
+```
+
+### Direct URL execution
+```sh
+# Run directly from GitHub without installation
+deno run --allow-all https://github.com/Comamoca/subaru/raw/main/src/cli.ts --help
+
+# Execute Gleam code
+deno run --allow-all https://github.com/Comamoca/subaru/raw/main/src/cli.ts --code 'import gleam/io
+pub fn main() { io.println("Hello from URL!") }'
+```
+
+### From GitHub (Local Development)
 ```sh
 # Clone repository
 git clone https://github.com/Comamoca/subaru

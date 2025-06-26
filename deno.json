@@ -22,10 +22,6 @@
     "cli": "deno run --allow-all src/cli.ts",
     "init-config": "deno run --allow-all src/cli.ts --init-config"
   },
-  "compilerOptions": {
-    "allowJs": false,
-    "strict": true
-  },
   "fmt": {
     "useTabs": false,
     "lineWidth": 100,

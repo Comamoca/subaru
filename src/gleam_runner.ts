@@ -24,6 +24,25 @@ export interface GleamRunnerConfig {
   debug?: boolean;
   logLevel?: 'silent' | 'error' | 'warn' | 'info' | 'debug' | 'trace';
   preloadScripts?: PreloadScript[];
+  noWarnings?: boolean;
+  warningColor?: 'red' | 'yellow' | 'green' | 'blue' | 'magenta' | 'cyan' | 'white' | 'gray';
+}
+
+// ANSI color codes
+const colors = {
+  red: '\x1b[31m',
+  yellow: '\x1b[33m',
+  green: '\x1b[32m',
+  blue: '\x1b[34m',
+  magenta: '\x1b[35m',
+  cyan: '\x1b[36m',
+  white: '\x1b[37m',
+  gray: '\x1b[90m',
+  reset: '\x1b[0m',
+} as const;
+
+function colorize(text: string, color: keyof typeof colors): string {
+  return `${colors[color]}${text}${colors.reset}`;
 }
 
 export class GleamRunner {
@@ -33,12 +52,16 @@ export class GleamRunner {
   private debug: boolean;
   private logLevel: string;
   private preloadScripts: PreloadScript[];
+  private noWarnings: boolean;
+  private warningColor: string;
 
   constructor(config: GleamRunnerConfig = {}) {
     this.wasmPath = config.wasmPath || "./wasm-compiler";
     this.debug = config.debug || false;
     this.logLevel = config.logLevel || 'silent';
     this.preloadScripts = config.preloadScripts || [];
+    this.noWarnings = config.noWarnings !== undefined ? config.noWarnings : true; // Default to true (suppress warnings)
+    this.warningColor = config.warningColor || 'yellow';
   }
 
   async initialize(): Promise<void> {
@@ -52,7 +75,7 @@ export class GleamRunner {
       
       // Initialize with WASM file
       const wasmFile = await Deno.readFile(`${this.wasmPath}/gleam_wasm_bg.wasm`);
-      this.wasmModule = await init(wasmFile);
+      this.wasmModule = await init({ module_or_path: wasmFile });
       
       // Initialize panic hook for better error reporting
       initialise_panic_hook(this.debug);
@@ -102,6 +125,28 @@ export class GleamRunner {
       // Store original console for restoration if needed
       (globalThis as any).__originalConsole = originalConsole;
     }
+  }
+
+  private formatWarning(warning: string): string {
+    if (this.noWarnings) {
+      return ''; // Return empty string for suppressed warnings
+    }
+    
+    const color = this.warningColor as keyof typeof colors;
+    return colorize(`Warning: ${warning}`, color);
+  }
+
+  private displayWarnings(warnings: string[]): void {
+    if (this.noWarnings) {
+      return; // Don't display warnings if suppressed
+    }
+    
+    warnings.forEach(warning => {
+      const formattedWarning = this.formatWarning(warning);
+      if (formattedWarning) {
+        console.warn(formattedWarning);
+      }
+    });
   }
 
   async compile(gleamCode: string, moduleName: string = "main"): Promise<CompileResult> {
@@ -157,6 +202,9 @@ gleam_stdlib = ">= 0.40.0 and < 2.0.0"
           warnings.push(warning);
         }
         
+        // Display warnings with color formatting (unless suppressed)
+        this.displayWarnings(warnings);
+        
         // Read compiled output
         const javascript = read_compiled_javascript(this.projectId, moduleName);
         const erlang = read_compiled_erlang(this.projectId, moduleName);
@@ -174,6 +222,9 @@ gleam_stdlib = ">= 0.40.0 and < 2.0.0"
         while ((warning = pop_warning(this.projectId)) !== undefined) {
           warnings.push(warning);
         }
+        
+        // Display warnings even on compilation failure (unless suppressed)
+        this.displayWarnings(warnings);
         
         errors.push(`Compilation failed: ${compileError}`);
         return {
@@ -222,10 +273,10 @@ gleam_stdlib = ">= 0.40.0 and < 2.0.0"
       // This is a simplified version that doesn't actually run the JS
       // but shows that compilation was successful
       
-      // Extract function calls from the generated code
+      // Extract all function calls from the generated code
       if (jsCode.includes('println')) {
-        const match = jsCode.match(/println\("([^"]+)"\)/);
-        if (match) {
+        const matches = jsCode.matchAll(/\$io\.println\("([^"]+)"\)/g);
+        for (const match of matches) {
           output.push(match[1]);
         }
       }

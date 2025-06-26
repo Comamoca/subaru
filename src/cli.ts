@@ -16,6 +16,9 @@ interface CliOptions {
   "wasm-path"?: string;
   config?: string;
   "init-config"?: boolean;
+  "no-warnings"?: boolean;
+  "show-warnings"?: boolean;
+  "warning-color"?: string;
 }
 
 const VERSION = "1.0.0";
@@ -41,6 +44,9 @@ OPTIONS:
     --wasm-path <PATH>      Path to WASM compiler directory
     --config <PATH>         Use specific config file
     --init-config           Create example config file
+    --no-warnings           Suppress compiler warnings (default)
+    --show-warnings          Show compiler warnings
+    --warning-color <COLOR>  Set warning color (red|yellow|green|blue|magenta|cyan|white|gray)
 
 EXAMPLES:
     subaru hello.gleam      # Execute file directly
@@ -53,6 +59,10 @@ EXAMPLES:
     subaru --url https://example.com/script.gleam
     
     subaru --compile --debug --code "pub fn add(a, b) { a + b }"
+    
+    subaru --show-warnings hello.gleam    # Show compiler warnings
+    
+    subaru --show-warnings --warning-color blue hello.gleam    # Blue warning text
     
     subaru --init-config    # Create example configuration file
     
@@ -94,9 +104,11 @@ async function runFromUrl(url: string, config: any): Promise<void> {
           console.log("\\n--- Erlang Output ---");
           console.log(result.erlang);
         }
+        // Warnings are already displayed by the GleamRunner
       } else {
         console.error("Compilation failed:");
         result.errors.forEach(error => console.error(`  ${error}`));
+        // Warnings are already displayed by the GleamRunner, even on failure
         Deno.exit(1);
       }
     } else {
@@ -133,9 +145,11 @@ async function runCode(code: string, config: any): Promise<void> {
           console.log("\\n--- Erlang Output ---");
           console.log(result.erlang);
         }
+        // Warnings are already displayed by the GleamRunner
       } else {
         console.error("Compilation failed:");
         result.errors.forEach(error => console.error(`  ${error}`));
+        // Warnings are already displayed by the GleamRunner, even on failure
         Deno.exit(1);
       }
     } else {
@@ -157,8 +171,8 @@ async function runCode(code: string, config: any): Promise<void> {
 
 async function main(): Promise<void> {
   const args = parseArgs(Deno.args, {
-    boolean: ["help", "version", "compile", "debug", "init-config"],
-    string: ["file", "code", "url", "wasm-path", "log-level", "config"],
+    boolean: ["help", "version", "compile", "debug", "init-config", "no-warnings", "show-warnings"],
+    string: ["file", "code", "url", "wasm-path", "log-level", "config", "warning-color"],
     alias: {
       h: "help",
       v: "version",
@@ -207,7 +221,10 @@ async function main(): Promise<void> {
     debug: args.debug !== undefined ? args.debug : fileConfig.debug,
     logLevel: (args["log-level"] || fileConfig.logLevel) as any,
     compile: args.compile,
+    noWarnings: args["show-warnings"] ? false : (args["no-warnings"] ? true : (fileConfig.noWarnings !== undefined ? fileConfig.noWarnings : true)),
+    warningColor: args["warning-color"] || fileConfig.warningColor || "yellow",
   };
+
 
   // Check for positional arguments (file paths)
   const positionalArgs = args._ as string[];
