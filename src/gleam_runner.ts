@@ -277,19 +277,26 @@ gleam_stdlib = ">= 0.40.0 and < 2.0.0"
       // This is a simplified version that doesn't actually run the JS
       // but shows that compilation was successful
 
-      // Extract println calls - look for various patterns
+      // Extract println calls - unified pattern matching
       if (jsCode.includes("println")) {
-        // Direct string literals
-        const printlnMatches = jsCode.matchAll(/\$io\.println\("([^"]+)"\)/g);
-        for (const match of printlnMatches) {
-          output.push(match[1]);
-        }
+        const processedMatches = new Set(); // Track processed matches to avoid duplicates
+        const allPrintlnMatches = jsCode.matchAll(/\$io\.println\(([^)]+)\)/g);
 
-        // Variable-based println calls
-        const varPrintlnMatches = jsCode.matchAll(/\$io\.println\(([^)]+)\)/g);
-        for (const match of varPrintlnMatches) {
+        for (const match of allPrintlnMatches) {
+          const fullMatch = match[0];
           const arg = match[1].trim();
-          if (arg.includes('"')) {
+
+          // Skip if we've already processed this exact match
+          if (processedMatches.has(fullMatch)) {
+            continue;
+          }
+          processedMatches.add(fullMatch);
+
+          if (arg.startsWith('"') && arg.endsWith('"')) {
+            // Direct string literal
+            const content = arg.slice(1, -1); // Remove quotes
+            output.push(content);
+          } else if (arg.includes('"')) {
             // Extract string from expression
             const stringMatch = arg.match(/"([^"]+)"/);
             if (stringMatch) {
