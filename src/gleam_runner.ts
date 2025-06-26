@@ -303,9 +303,79 @@ gleam_stdlib = ">= 0.40.0 and < 2.0.0"
     // Import write_module function
     const { write_module } = await import(`file://${Deno.cwd()}/${this.wasmPath}/gleam_wasm.js`);
 
-    // Add basic gleam/io module - minimal implementation for testing
-    const gleamIo = `
-// Basic gleam/io module implementation
+    // Define standard libraries to preload
+    const standardLibraries = [
+      {
+        name: "gleam_stdlib",
+        baseUrl: "https://raw.githubusercontent.com/gleam-lang/stdlib/main/src",
+        modules: [
+          "gleam/io.gleam",
+          "gleam/list.gleam",
+          "gleam/string.gleam",
+          "gleam/string_tree.gleam",
+          "gleam/int.gleam",
+          "gleam/float.gleam",
+          "gleam/bool.gleam",
+          "gleam/result.gleam",
+          "gleam/option.gleam",
+          "gleam/order.gleam",
+          "gleam/bit_array.gleam",
+          "gleam/dict.gleam",
+          "gleam/set.gleam",
+          "gleam/uri.gleam",
+          "gleam/dynamic.gleam",
+          "gleam/function.gleam",
+        ],
+      },
+      {
+        name: "gleam_javascript",
+        baseUrl: "https://raw.githubusercontent.com/gleam-lang/javascript/main/src",
+        modules: [
+          "gleam/javascript/array.gleam",
+          "gleam/javascript/promise.gleam",
+        ],
+      },
+    ];
+
+    // Load standard libraries
+    for (const library of standardLibraries) {
+      if (this.debug) {
+        console.log(`Loading ${library.name} modules...`);
+      }
+
+      for (const modulePath of library.modules) {
+        try {
+          const moduleUrl = `${library.baseUrl}/${modulePath}`;
+          const response = await fetch(moduleUrl);
+
+          if (response.ok) {
+            const code = await response.text();
+            const moduleName = modulePath.replace(".gleam", "");
+            write_module(this.projectId, moduleName, code);
+
+            if (this.debug) {
+              console.log(`✓ Loaded ${moduleName}`);
+            }
+          } else if (this.debug) {
+            console.warn(`⚠ Failed to load ${modulePath}: ${response.status}`);
+          }
+        } catch (error) {
+          if (this.debug) {
+            console.warn(`⚠ Error loading ${modulePath}:`, error);
+          }
+        }
+      }
+    }
+
+    // Add a fallback basic gleam/io implementation if stdlib version failed
+    try {
+      // Test if gleam/io was successfully loaded
+      const testCode = 'import gleam/io\npub fn check() { io.println("check") }';
+      write_module(this.projectId, "test_io", testCode);
+    } catch {
+      // Fallback implementation
+      const gleamIo = `
+// Fallback gleam/io module implementation
 
 @external(javascript, "console", "log")
 pub fn print(value: a) -> Nil
@@ -314,12 +384,15 @@ pub fn println(value: a) -> Nil {
   print(value)
 }
 
-@external(javascript, "console", "debug")
+@external(javascript, "console", "debug") 
 pub fn debug(value: a) -> a
 `;
+      write_module(this.projectId, "gleam/io", gleamIo);
 
-    // Write the io module to the project
-    write_module(this.projectId, "gleam/io", gleamIo);
+      if (this.debug) {
+        console.log("✓ Using fallback gleam/io implementation");
+      }
+    }
   }
 
   private async addPreloadScripts(): Promise<void> {

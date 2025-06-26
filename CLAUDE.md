@@ -119,6 +119,53 @@ git secrets --scan       # Scan for secrets (pre-commit hook)
 - **Preload Scripts**: Configure custom modules to be available in all compilations
 - **Configuration Files**: JSON-based configuration with preload scripts and settings
 - **Error Handling**: Comprehensive error reporting for compilation and runtime issues
+- **Standard Libraries**: Automatically preloads essential Gleam stdlib modules and JavaScript interop libraries
+
+## Preloaded Libraries
+
+Subaru automatically preloads the following libraries for all Gleam code execution:
+
+### Gleam Standard Library (partial)
+
+- `gleam/io` - Input/output operations
+- `gleam/list` - List manipulation functions
+- `gleam/string` & `gleam/string_tree` - String operations
+- `gleam/int` - Integer operations
+- `gleam/float` - Floating point operations
+- `gleam/bool` - Boolean operations
+- `gleam/result` - Result type operations
+- `gleam/option` - Option type operations
+- `gleam/order` - Ordering operations
+- `gleam/bit_array` - Bit array operations
+- `gleam/dict` - Dictionary operations
+- `gleam/set` - Set operations
+- `gleam/uri` - URI operations
+- `gleam/dynamic` - Dynamic type operations
+- `gleam/function` - Function utilities
+
+### Gleam JavaScript Interop
+
+- `gleam/javascript/array` - JavaScript array interop
+- `gleam/javascript/promise` - JavaScript promise interop
+
+### Usage Example
+
+```gleam
+import gleam/io
+import gleam/list
+import gleam/string
+
+pub fn main() {
+  io.println("Hello from Gleam WASM!")
+  
+  let numbers = [1, 2, 3, 4, 5]
+  let doubled = list.map(numbers, fn(x) { x * 2 })
+  
+  io.println("Processing complete!")
+}
+```
+
+**Note**: Some advanced stdlib functions may have limited functionality in the WASM environment. The libraries are automatically fetched from their official repositories and loaded at runtime.
 
 ## Configuration
 
