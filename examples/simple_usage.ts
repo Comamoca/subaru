@@ -14,6 +14,7 @@ pub fn main() {
 
 const mathCode = `
 import gleam/io
+import gleam/int
 
 pub fn add(a: Int, b: Int) -> Int {
   a + b

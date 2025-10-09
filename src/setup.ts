@@ -8,44 +8,85 @@ import { join } from "https://deno.land/std@0.220.0/path/mod.ts";
 import { ensureDir } from "https://deno.land/std@0.220.0/fs/mod.ts";
 
 const GLEAM_VERSION = Deno.env.get("GLEAM_VERSION") || "1.11.0";
-const WASM_DIR = "wasm-compiler";
 
-async function downloadGleamWasm(): Promise<void> {
-  console.log(`📥 Downloading Gleam WASM compiler v${GLEAM_VERSION}...`);
+/**
+ * Get the platform-specific base cache directory for Subaru
+ */
+export function getSubaruCacheDir(): string {
+  const home = Deno.env.get("HOME") || Deno.env.get("USERPROFILE");
+  if (!home) {
+    throw new Error("Cannot determine home directory");
+  }
+
+  const platform = Deno.build.os;
+  let cacheBase: string;
+
+  if (platform === "darwin") {
+    // macOS: ~/Library/Caches
+    cacheBase = `${home}/Library/Caches`;
+  } else if (platform === "windows") {
+    // Windows: %LOCALAPPDATA%
+    cacheBase = Deno.env.get("LOCALAPPDATA") || `${home}/AppData/Local`;
+  } else {
+    // Linux/Unix: XDG_CACHE_HOME or ~/.cache
+    cacheBase = Deno.env.get("XDG_CACHE_HOME") || `${home}/.cache`;
+  }
+
+  return join(cacheBase, "subaru");
+}
+
+/**
+ * Get the platform-specific cache directory for Subaru
+ */
+export function getWasmCacheDir(): string {
+  return join(getSubaruCacheDir(), "wasm-compiler");
+}
+
+/**
+ * Download Gleam WASM compiler to a specific directory
+ */
+async function downloadGleamWasmToPath(
+  targetPath: string,
+  version: string = GLEAM_VERSION,
+): Promise<void> {
+  console.log(`📥 Downloading Gleam WASM compiler v${version}...`);
 
   try {
     // Remove existing directory
     try {
-      await Deno.remove(WASM_DIR, { recursive: true });
+      await Deno.remove(targetPath, { recursive: true });
     } catch {
       // Directory doesn't exist, ignore
     }
 
-    // Create wasm-compiler directory
-    await ensureDir(WASM_DIR);
+    // Create target directory
+    await ensureDir(targetPath);
 
     // Download URL
     const downloadUrl =
-      `https://github.com/gleam-lang/gleam/releases/download/v${GLEAM_VERSION}/gleam-v${GLEAM_VERSION}-browser.tar.gz`;
+      `https://github.com/gleam-lang/gleam/releases/download/v${version}/gleam-v${version}-browser.tar.gz`;
 
     console.log(`Downloading from: ${downloadUrl}`);
 
     // Download the tar.gz file
     const response = await fetch(downloadUrl);
     if (!response.ok) {
-      throw new Error(`Failed to download: ${response.status} ${response.statusText}`);
+      throw new Error(
+        `Failed to download: ${response.status} ${response.statusText}\n` +
+          `Please check your internet connection or verify the version exists.`,
+      );
     }
 
     const tarData = new Uint8Array(await response.arrayBuffer());
 
     // Save to temporary file
-    const tempFile = join(WASM_DIR, "gleam-wasm.tar.gz");
+    const tempFile = join(targetPath, "gleam-wasm.tar.gz");
     await Deno.writeFile(tempFile, tarData);
 
     // Extract using tar command
     const extractProcess = new Deno.Command("tar", {
       args: ["xzf", "gleam-wasm.tar.gz"],
-      cwd: WASM_DIR,
+      cwd: targetPath,
       stdout: "piped",
       stderr: "piped",
     });
@@ -60,20 +101,81 @@ async function downloadGleamWasm(): Promise<void> {
     // Remove temporary tar file
     await Deno.remove(tempFile);
 
-    console.log("✅ Gleam WASM compiler downloaded successfully!");
-    console.log(`📁 Location: ${join(Deno.cwd(), WASM_DIR)}`);
+    console.log(`✅ Gleam WASM compiler downloaded successfully!`);
+    console.log(`📁 Location: ${targetPath}`);
 
     // List extracted files
     console.log("📋 Files:");
-    for await (const entry of Deno.readDir(WASM_DIR)) {
-      const stat = await Deno.stat(join(WASM_DIR, entry.name));
+    for await (const entry of Deno.readDir(targetPath)) {
+      const stat = await Deno.stat(join(targetPath, entry.name));
       const size = entry.isFile ? ` (${(stat.size / 1024).toFixed(1)}KB)` : "";
       console.log(`  ${entry.isDirectory ? "📁" : "📄"} ${entry.name}${size}`);
     }
   } catch (error) {
     console.error("❌ Failed to download Gleam WASM compiler:");
     console.error(error instanceof Error ? error.message : String(error));
+    throw error; // Re-throw for caller to handle
+  }
+}
+
+async function downloadGleamWasm(): Promise<void> {
+  try {
+    const cacheDir = getWasmCacheDir();
+    await downloadGleamWasmToPath(cacheDir);
+  } catch (error) {
+    console.error("❌ Failed to download Gleam WASM compiler:");
+    console.error(error instanceof Error ? error.message : String(error));
     Deno.exit(1);
+  }
+}
+
+/**
+ * Clean WASM compiler cache only
+ */
+export async function cleanWasmCache(): Promise<void> {
+  try {
+    const wasmDir = getWasmCacheDir();
+    console.log(`🗑️  Removing WASM compiler cache: ${wasmDir}`);
+
+    try {
+      await Deno.remove(wasmDir, { recursive: true });
+      console.log("✅ WASM compiler cache cleared successfully");
+    } catch (error) {
+      if (error instanceof Deno.errors.NotFound) {
+        console.log("ℹ️  WASM compiler cache directory does not exist");
+      } else {
+        throw error;
+      }
+    }
+  } catch (error) {
+    console.error("❌ Failed to clean WASM cache:");
+    console.error(error instanceof Error ? error.message : String(error));
+    throw error;
+  }
+}
+
+/**
+ * Clean entire Subaru cache directory
+ */
+export async function cleanAllCache(): Promise<void> {
+  try {
+    const cacheDir = getSubaruCacheDir();
+    console.log(`🗑️  Removing entire cache directory: ${cacheDir}`);
+
+    try {
+      await Deno.remove(cacheDir, { recursive: true });
+      console.log("✅ Cache directory cleared successfully");
+    } catch (error) {
+      if (error instanceof Deno.errors.NotFound) {
+        console.log("ℹ️  Cache directory does not exist");
+      } else {
+        throw error;
+      }
+    }
+  } catch (error) {
+    console.error("❌ Failed to clean cache:");
+    console.error(error instanceof Error ? error.message : String(error));
+    throw error;
   }
 }
 
@@ -82,4 +184,4 @@ if (import.meta.main) {
   await downloadGleamWasm();
 }
 
-export { downloadGleamWasm };
+export { downloadGleamWasm, downloadGleamWasmToPath };

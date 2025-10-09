@@ -2,6 +2,15 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## CRITICAL PRIORITY INSTRUCTIONS
+
+**MOST IMPORTANT**: When evaluating Gleam script execution via `deno task cli`, NEVER use simulation. Always base script evaluation on the actual Deno execution results. The runner executes real HTTP requests and should return real data, not simulated output.
+
+- Execute scripts using `deno task cli <script.gleam>`
+- Evaluate success/failure based on actual console output
+- Debug issues using real execution results
+- No simulation or fake data generation allowed
+
 ## Project Overview
 
 This is "subaru" - a Gleam WASM runner that allows executing Gleam code dynamically using WebAssembly. The project uses:
@@ -149,6 +158,45 @@ Subaru automatically preloads the following libraries for all Gleam code executi
 - `gleam/javascript/array` - JavaScript array interop
 - `gleam/javascript/promise` - JavaScript promise interop
 
+### Third-party Libraries
+
+#### Plinth
+
+Browser and JavaScript utilities for client-side development:
+
+- `plinth/browser/document` - DOM document manipulation
+- `plinth/browser/element` - HTML element operations
+- `plinth/browser/event` - Event handling
+- `plinth/browser/window` - Browser window operations
+- `plinth/javascript/global` - Global JavaScript operations
+- `plinth/javascript/date` - Date and time utilities
+- `plinth/javascript/console` - Console operations
+- `plinth/javascript/json` - JSON serialization/deserialization
+- `plinth/javascript/storage` - Local/session storage
+
+#### HTTP Client
+
+HTTP request and response handling:
+
+- `gleam/http` - Core HTTP types and utilities
+- `gleam/http/request` - HTTP request building
+- `gleam/http/response` - HTTP response handling
+- `gleam/http/service` - HTTP service utilities
+- `gleam/fetch` - Fetch API for making HTTP requests
+- `gleam/fetch/form_data` - Form data handling for HTTP requests
+
+#### Data Storage
+
+- `dinostore` - Key-value storage for Deno runtime
+
+#### Input/Output
+
+- `gleam_stdin` - Standard input reading utilities
+
+#### JSON Processing
+
+- `gleam/json` - JSON encoding and decoding for Gleam data structures
+
 ### Usage Example
 
 ```gleam
@@ -225,6 +273,14 @@ The project uses a Nix flake with devenv for reproducible development:
 This project follows [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) specification for consistent commit messages.
 
 **IMPORTANT**: All commits MUST be GPG signed. Ensure `git config --global commit.gpgsign true` is set.
+
+**REFACTORING REQUIREMENT**: After completing any implementation, ALWAYS refactor the code for:
+
+- Code clarity and maintainability
+- Performance optimization
+- Proper error handling
+- Type safety improvements
+- Documentation updates
 
 ### Format
 

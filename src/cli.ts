@@ -3,6 +3,7 @@
 import { parseArgs } from "https://deno.land/std@0.218.0/cli/parse_args.ts";
 import Subaru from "./subaru_runner.ts";
 import { createExampleConfig, loadConfig, saveConfig, type SubaruConfigFile } from "./config.ts";
+import { cleanAllCache } from "./setup.ts";
 
 interface CliOptions {
   help: boolean;
@@ -19,6 +20,7 @@ interface CliOptions {
   "no-warnings"?: boolean;
   "show-warnings"?: boolean;
   "warning-color"?: string;
+  "clean-cache"?: boolean;
   _: string[];
 }
 
@@ -46,34 +48,39 @@ OPTIONS:
     --config <PATH>         Use specific config file
     --init-config           Create example config file
     --no-warnings           Suppress compiler warnings (default)
-    --show-warnings          Show compiler warnings
-    --warning-color <COLOR>  Set warning color (red|yellow|green|blue|magenta|cyan|white|gray)
+    --show-warnings         Show compiler warnings
+    --warning-color <COLOR> Set warning color (red|yellow|green|blue|magenta|cyan|white|gray)
+    --clean-cache           Remove cache directory
 
 EXAMPLES:
     subaru hello.gleam      # Execute file directly
-    
+
     subaru --code "import gleam/io
     pub fn main() { io.println(\\"Hello!\\") }"
-    
+
     subaru --file hello.gleam
-    
+
     subaru --url https://example.com/script.gleam
-    
+
     subaru --compile --debug --code "pub fn add(a, b) { a + b }"
-    
+
     subaru --show-warnings hello.gleam    # Show compiler warnings
-    
+
     subaru --show-warnings --warning-color blue hello.gleam    # Blue warning text
-    
+
     subaru --init-config    # Create example configuration file
-    
+
     subaru --config my-config.json script.gleam
+
+    subaru --clean-cache    # Remove cache directory
 `;
 
 async function runFromFile(filePath: string, config: SubaruConfigFile): Promise<void> {
   try {
     const code = await Deno.readTextFile(filePath);
-    await runCode(code, config);
+    // Extract module name from file path (remove .gleam extension and directory path)
+    const moduleName = filePath.split("/").pop()?.replace(/\.gleam$/, "") || "main";
+    await runCode(code, config, moduleName);
   } catch (error) {
     console.error(
       `Error reading file ${filePath}:`,
@@ -132,7 +139,11 @@ async function runFromUrl(url: string, config: SubaruConfigFile): Promise<void> 
   }
 }
 
-async function runCode(code: string, config: SubaruConfigFile): Promise<void> {
+async function runCode(
+  code: string,
+  config: SubaruConfigFile,
+  moduleName: string = "main",
+): Promise<void> {
   try {
     const subaru = new Subaru(config);
 
@@ -157,7 +168,7 @@ async function runCode(code: string, config: SubaruConfigFile): Promise<void> {
         Deno.exit(1);
       }
     } else {
-      const result = await subaru.execute(code);
+      const result = await subaru.execute(code, moduleName);
 
       if (result.success) {
         result.output.forEach((line) => console.log(line));
@@ -175,7 +186,16 @@ async function runCode(code: string, config: SubaruConfigFile): Promise<void> {
 
 async function main(): Promise<void> {
   const args = parseArgs(Deno.args, {
-    boolean: ["help", "version", "compile", "debug", "init-config", "no-warnings", "show-warnings"],
+    boolean: [
+      "help",
+      "version",
+      "compile",
+      "debug",
+      "init-config",
+      "no-warnings",
+      "show-warnings",
+      "clean-cache",
+    ],
     string: ["file", "code", "url", "wasm-path", "log-level", "config", "warning-color"],
     alias: {
       h: "help",
@@ -194,6 +214,19 @@ async function main(): Promise<void> {
   if (args.version) {
     console.log(`Subaru v${VERSION}`);
     return;
+  }
+
+  if (args["clean-cache"]) {
+    try {
+      await cleanAllCache();
+      return;
+    } catch (error) {
+      console.error(
+        "❌ Failed to clean cache:",
+        error instanceof Error ? error.message : String(error),
+      );
+      Deno.exit(1);
+    }
   }
 
   if (args["init-config"]) {

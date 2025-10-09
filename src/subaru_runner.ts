@@ -20,12 +20,12 @@ export class Subaru {
     this.initialized = true;
   }
 
-  async execute(gleamCode: string): Promise<RunResult> {
+  async execute(gleamCode: string, moduleName: string = "main"): Promise<RunResult> {
     if (!this.initialized) {
       await this.init();
     }
 
-    return await this.runner.run(gleamCode);
+    return await this.runner.run(gleamCode, moduleName);
   }
 
   async compile(gleamCode: string): Promise<CompileResult> {
