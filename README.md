@@ -6,7 +6,7 @@
 ![Open Issues](https://img.shields.io/github/issues-raw/Comamoca/subaru?style=flat-square)
 ![Bug Issues](https://img.shields.io/github/issues/Comamoca/subaru/bug?style=flat-square)
 
-<img src="https://emoji2svg.deno.dev/api/🦊" alt="eyecatch" height="100">
+<img src="https://emoji2svg.deno.dev/api/✨️" alt="eyecatch" height="100">
 
 # subaru
 
@@ -94,20 +94,6 @@ deno task setup
 
 # Run CLI
 deno task cli --help
-```
-
-### As Gleam Package
-
-```sh
-gleam add subaru@1
-```
-
-```gleam
-import subaru
-
-pub fn main() {
-  // Use subaru functions here
-}
 ```
 
 ### From Source
@@ -198,33 +184,8 @@ This project is open source and available under the MIT License.
 
 #### Preloaded Gleam Libraries
 
-**Gleam Standard Library (automatic)**
-
-- `gleam/io` - Input/output operations (println, debug)
-- `gleam/list` - List manipulation (map, filter, fold, etc.)
-- `gleam/string` - String operations (uppercase, lowercase, split)
-- `gleam/string_tree` - String tree operations (dependency for string)
-- `gleam/int` - Integer operations (compare, to_string, arithmetic)
-- `gleam/float` - Floating point operations
-- `gleam/bool` - Boolean operations and logic
-- `gleam/result` - Result type operations (Ok/Error handling)
-- `gleam/option` - Option type operations (Some/None handling)
-- `gleam/order` - Ordering operations (Lt/Eq/Gt)
-- `gleam/bit_array` - Bit array operations
-- `gleam/dict` - Dictionary/map operations
-- `gleam/set` - Set operations
-- `gleam/uri` - URI parsing and manipulation
-- `gleam/dynamic` - Dynamic type operations
-- `gleam/function` - Function utilities
-
-**Gleam JavaScript Interop (automatic)**
-
-- `gleam/javascript/array` - JavaScript array interop
-- `gleam/javascript/promise` - JavaScript promise interop
-
-**Development Dependencies**
-
-- **gleeunit** - Testing framework for Gleam projects
+- [gleam_stdlib](https://hexdocs.pm/gleam_stdlib/)
+- [gleam_javascript](https://hexdocs.pm/gleam_javascript/index.html)
 
 #### Development Environment
 
