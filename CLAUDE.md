@@ -98,7 +98,16 @@ git secrets --scan       # Scan for secrets (pre-commit hook)
 - `src/gleam_runner.ts`: Core WASM runner implementation
 - `src/subaru_runner.ts`: High-level API for Gleam code execution
 - `src/cli.ts`: Command-line interface for the runner
+- `src/hex/`: Hex.pm package integration
+  - `hex_client.ts`: Hex.pm API client
+  - `tarball_extractor.ts`: Hex tarball extraction
+  - `package_cache.ts`: Package caching
+- `src/stdlib/`: Standard library loading
+  - `builtin_packages.ts`: Builtin package definitions
+  - `stdlib_loader.ts`: Library loading orchestration
 - `test/subaru_runner_test.ts`: Deno tests for WASM functionality
+- `test/hex/`: Tests for Hex.pm integration
+- `test/stdlib/`: Tests for stdlib loading
 - `examples/simple_usage.ts`: Usage examples
 
 ### Configuration & Scripts
@@ -128,7 +137,10 @@ git secrets --scan       # Scan for secrets (pre-commit hook)
 - **Preload Scripts**: Configure custom modules to be available in all compilations
 - **Configuration Files**: JSON-based configuration with preload scripts and settings
 - **Error Handling**: Comprehensive error reporting for compilation and runtime issues
-- **Standard Libraries**: Automatically preloads essential Gleam stdlib modules and JavaScript interop libraries
+- **Standard Libraries**: Automatically preloads essential Gleam stdlib modules and JavaScript interop libraries from Hex.pm
+- **Hex.pm Integration**: Downloads packages from Hex.pm with automatic caching and version management
+- **Package Caching**: Caches downloaded packages in `~/.cache/subaru/packages/` with TTL-based expiration
+- **Third-party Packages**: Configure additional Hex.pm packages to load via config file
 - **Echo Keyword Support**: Full support for Gleam v1.11.0's `echo` debugging keyword with file/line information
 
 ## Preloaded Libraries
@@ -185,13 +197,14 @@ HTTP request and response handling:
 - `gleam/fetch` - Fetch API for making HTTP requests
 - `gleam/fetch/form_data` - Form data handling for HTTP requests
 
-#### Data Storage
+#### Optional Packages (Not Loaded by Default)
+
+The following packages are available but not loaded by default due to API compatibility issues with the latest gleam_stdlib:
 
 - `dinostore` - Key-value storage for Deno runtime
-
-#### Input/Output
-
 - `gleam_stdin` - Standard input reading utilities
+
+To use these packages, add them to your config with specific compatible versions.
 
 #### JSON Processing
 
@@ -225,7 +238,7 @@ Subaru supports Gleam v1.11.0's `echo` keyword for enhanced debugging:
 - Works seamlessly in pipelines
 - Replaces `io.debug` with better location tracking
 
-**Note**: Some advanced stdlib functions may have limited functionality in the WASM environment. The libraries are automatically fetched from their official repositories and loaded at runtime.
+**Note**: Some advanced stdlib functions may have limited functionality in the WASM environment. The libraries are automatically fetched from Hex.pm and cached locally for faster subsequent runs.
 
 ## Configuration
 
@@ -255,8 +268,61 @@ Example configuration:
       "moduleName": "local_lib",
       "filePath": "./libs/local.gleam"
     }
-  ]
+  ],
+  "standardLibrary": {
+    "packages": [
+      "lustre",
+      { "name": "gleam_otp", "version": "0.10.0" }
+    ],
+    "cache": {
+      "enabled": true,
+      "ttl": 604800
+    }
+  },
+  "noStdlib": false
 }
+```
+
+### Standard Library Configuration
+
+The `standardLibrary` section allows you to configure how packages are loaded:
+
+- **packages**: Additional third-party packages to load from Hex.pm (beyond the 8 builtin packages). Can be:
+  - A string (package name, uses latest version): `"lustre"`
+  - An object with specific version: `{ "name": "gleam_otp", "version": "0.10.0" }`
+- **cache**: Package cache settings
+  - **enabled**: Enable/disable caching (default: true)
+  - **directory**: Custom cache directory (default: `~/.cache/subaru/packages/`)
+  - **ttl**: Cache TTL in seconds (default: 604800 = 7 days)
+
+### CLI Options for Standard Library
+
+```bash
+# Disable all builtin packages
+subaru --no-stdlib script.gleam
+
+# Clean package cache only
+subaru --clean-package-cache
+
+# Clean all caches (WASM compiler + packages)
+subaru --clean-cache
+```
+
+## Cache Structure
+
+Subaru uses a cache directory to store downloaded files:
+
+```
+~/.cache/subaru/
+├── wasm-compiler/          # Gleam WASM compiler
+└── packages/               # Hex.pm packages
+    ├── gleam_stdlib/
+    │   └── 0.68.1/
+    │       ├── .meta.json
+    │       └── src/gleam/*.gleam
+    └── gleam_json/
+        └── 2.0.0/
+            └── ...
 ```
 
 ## Development Environment

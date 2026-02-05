@@ -1,4 +1,8 @@
 import type { SubaruConfig } from "./subaru_runner.ts";
+import type { StandardLibraryConfig, ThirdPartyPackage } from "./stdlib/mod.ts";
+import type { WorkerPermissions } from "./gleam_runner.ts";
+
+export type { StandardLibraryConfig, ThirdPartyPackage, WorkerPermissions };
 
 export interface SubaruConfigFile extends SubaruConfig {
   preloadScripts?: Array<{
@@ -7,6 +11,14 @@ export interface SubaruConfigFile extends SubaruConfig {
     url?: string;
     filePath?: string;
   }>;
+  // Standard library configuration (Hex.pm packages)
+  standardLibrary?: StandardLibraryConfig;
+  // Disable loading of builtin packages
+  noStdlib?: boolean;
+  // Worker permissions for code execution
+  workerPermissions?: WorkerPermissions;
+  // Execution timeout in milliseconds
+  timeout?: number;
 }
 
 export async function loadConfig(configPath?: string): Promise<SubaruConfig> {
@@ -46,6 +58,9 @@ function normalizeConfig(config: SubaruConfigFile): SubaruConfig {
     timeout: config.timeout,
     noWarnings: config.noWarnings,
     warningColor: config.warningColor,
+    noStdlib: config.noStdlib,
+    standardLibrary: config.standardLibrary,
+    workerPermissions: config.workerPermissions,
   };
 
   // Convert preloadScripts format
@@ -100,5 +115,28 @@ pub fn add(a: Int, b: Int) -> Int {
         filePath: "./libs/my_local_lib.gleam",
       },
     ],
+    // Standard library configuration
+    standardLibrary: {
+      // Additional third-party packages to load (beyond the 8 builtin packages)
+      packages: [
+        // "lustre",  // Just package name (uses latest version)
+        // { name: "gleam_otp", version: "0.10.0" },  // Specific version
+      ],
+      cache: {
+        enabled: true,
+        ttl: 604800, // 7 days in seconds
+      },
+    },
+    // Set to true to disable loading builtin packages
+    noStdlib: false,
+    // Worker permissions for code execution (all enabled by default)
+    workerPermissions: {
+      read: true, // File system read access (required for simplifile)
+      write: true, // File system write access
+      net: true, // Network access (required for gleam/fetch)
+      env: true, // Environment variable access
+    },
+    // Execution timeout in milliseconds (default: 30000)
+    timeout: 30000,
   };
 }

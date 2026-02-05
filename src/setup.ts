@@ -185,3 +185,6 @@ if (import.meta.main) {
 }
 
 export { downloadGleamWasm, downloadGleamWasmToPath };
+
+// Re-export package cache helpers from hex module
+export { cleanPackageCache, getPackageCacheDir } from "./hex/mod.ts";

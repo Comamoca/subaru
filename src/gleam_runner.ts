@@ -1,4 +1,5 @@
 import { downloadGleamWasmToPath, getWasmCacheDir } from "./setup.ts";
+import { createStdlibLoader, type StandardLibraryConfig } from "./stdlib/mod.ts";
 
 export interface CompileResult {
   success: boolean;
@@ -6,6 +7,10 @@ export interface CompileResult {
   erlang?: string;
   warnings: string[];
   errors: string[];
+  // All compiled JavaScript modules (module name -> JS code)
+  allModules?: Map<string, string>;
+  // FFI JavaScript files (path -> content)
+  ffiFiles?: Map<string, string>;
 }
 
 export interface RunResult {
@@ -21,6 +26,13 @@ export interface PreloadScript {
   filePath?: string;
 }
 
+export interface WorkerPermissions {
+  read?: boolean | string[];
+  write?: boolean | string[];
+  net?: boolean | string[];
+  env?: boolean | string[];
+}
+
 export interface GleamRunnerConfig {
   wasmPath?: string;
   debug?: boolean;
@@ -28,6 +40,10 @@ export interface GleamRunnerConfig {
   preloadScripts?: PreloadScript[];
   noWarnings?: boolean;
   warningColor?: "red" | "yellow" | "green" | "blue" | "magenta" | "cyan" | "white" | "gray";
+  noStdlib?: boolean;
+  standardLibrary?: StandardLibraryConfig;
+  workerPermissions?: WorkerPermissions;
+  timeout?: number;
 }
 
 // Constants for default values and patterns
@@ -123,6 +139,9 @@ async function resolveWasmPath(configPath?: string, debug: boolean = false): Pro
   return cachePath;
 }
 
+// Default timeout for worker execution (30 seconds)
+const DEFAULT_TIMEOUT = 30000;
+
 export class GleamRunner {
   private wasmPath: string;
   private wasmModule: unknown;
@@ -132,6 +151,14 @@ export class GleamRunner {
   private preloadScripts: PreloadScript[];
   private noWarnings: boolean;
   private warningColor: string;
+  private noStdlib: boolean;
+  private standardLibrary: StandardLibraryConfig;
+  private workerPermissions: WorkerPermissions;
+  private timeout: number;
+  // Track all module names written during compilation
+  private writtenModules: Set<string> = new Set();
+  // Track FFI files collected during stdlib loading
+  private ffiFiles: Map<string, string> = new Map();
 
   constructor(config: GleamRunnerConfig = {}) {
     this.wasmPath = config.wasmPath || "";
@@ -140,6 +167,15 @@ export class GleamRunner {
     this.preloadScripts = config.preloadScripts || [];
     this.noWarnings = config.noWarnings !== undefined ? config.noWarnings : true;
     this.warningColor = config.warningColor || DEFAULT_WARNING_COLOR;
+    this.noStdlib = config.noStdlib || false;
+    this.standardLibrary = config.standardLibrary || {};
+    this.workerPermissions = config.workerPermissions || {
+      read: true,
+      write: true,
+      net: true,
+      env: true,
+    };
+    this.timeout = config.timeout || DEFAULT_TIMEOUT;
   }
 
   async initialize(): Promise<void> {
@@ -259,6 +295,10 @@ export class GleamRunner {
       reset_filesystem(this.projectId);
       reset_warnings(this.projectId);
 
+      // Clear tracked modules and FFI files for this compilation
+      this.writtenModules.clear();
+      this.ffiFiles.clear();
+
       // Add standard library modules first
       await this.addStandardLibrary();
 
@@ -267,6 +307,7 @@ export class GleamRunner {
 
       // Write the Gleam code to a module (write_module automatically adds .gleam extension)
       write_module(this.projectId, moduleName, gleamCode);
+      this.writtenModules.add(moduleName);
 
       // Write a basic gleam.toml
       const gleamToml = `name = "${moduleName}"
@@ -294,9 +335,86 @@ gleam_stdlib = ">= 0.40.0 and < 2.0.0"
         // Display warnings with color formatting (unless suppressed)
         this.displayWarnings(warnings);
 
-        // Read compiled output
+        // Read compiled output for main module
         const javascript = read_compiled_javascript(this.projectId, moduleName);
         const erlang = read_compiled_erlang(this.projectId, moduleName);
+
+        // Import read_file_bytes for reading runtime files
+        const { read_file_bytes } = await import(`file://${this.wasmPath}/gleam_wasm.js`);
+        const decoder = new TextDecoder();
+
+        // Read all compiled JavaScript modules
+        const allModules = new Map<string, string>();
+
+        // First, try to read gleam_stdlib.mjs (the Gleam runtime)
+        // Try multiple possible paths
+        const runtimePaths = [
+          "/build/gleam_stdlib.mjs",
+          "build/gleam_stdlib.mjs",
+          "/build/dev/javascript/gleam_stdlib/gleam_stdlib.mjs",
+          "/build/dev/javascript/main/gleam_stdlib.mjs",
+          "/gleam_stdlib.mjs",
+        ];
+
+        for (const runtimePath of runtimePaths) {
+          try {
+            const stdlibBytes = read_file_bytes(this.projectId, runtimePath);
+            if (stdlibBytes && stdlibBytes.length > 0) {
+              allModules.set("gleam_stdlib", decoder.decode(stdlibBytes));
+              if (this.debug) {
+                console.log(
+                  `✓ Read gleam_stdlib.mjs from ${runtimePath} (${stdlibBytes.length} bytes)`,
+                );
+              }
+              break;
+            }
+          } catch {
+            // Try next path
+          }
+        }
+
+        if (!allModules.has("gleam_stdlib") && this.debug) {
+          console.log("⚠ Could not find gleam_stdlib.mjs - will use prelude stub");
+        }
+
+        // Read gleam.mjs (the Gleam prelude/runtime) - this is essential for type definitions
+        const preludePaths = [
+          "/build/gleam.mjs",
+          "build/gleam.mjs",
+        ];
+
+        for (const preludePath of preludePaths) {
+          try {
+            const preludeBytes = read_file_bytes(this.projectId, preludePath);
+            if (preludeBytes && preludeBytes.length > 0) {
+              allModules.set("gleam", decoder.decode(preludeBytes));
+              if (this.debug) {
+                console.log(
+                  `✓ Read gleam.mjs (prelude) from ${preludePath} (${preludeBytes.length} bytes)`,
+                );
+              }
+              break;
+            }
+          } catch {
+            // Try next path
+          }
+        }
+
+        if (!allModules.has("gleam") && this.debug) {
+          console.log("⚠ Could not find gleam.mjs (prelude) - will use stub");
+        }
+
+        // Read compiled JavaScript for all written modules
+        for (const modName of this.writtenModules) {
+          try {
+            const modJs = read_compiled_javascript(this.projectId, modName);
+            if (modJs) {
+              allModules.set(modName, modJs);
+            }
+          } catch {
+            // Module might not have compiled JavaScript output
+          }
+        }
 
         return {
           success: true,
@@ -304,6 +422,8 @@ gleam_stdlib = ">= 0.40.0 and < 2.0.0"
           erlang: erlang || undefined,
           warnings,
           errors,
+          allModules,
+          ffiFiles: this.ffiFiles.size > 0 ? new Map(this.ffiFiles) : undefined,
         };
       } catch (compileError) {
         // Collect warnings even if compilation fails
@@ -343,7 +463,12 @@ gleam_stdlib = ">= 0.40.0 and < 2.0.0"
     }
 
     try {
-      return await this.executeJavaScript(compileResult.javascript!, moduleName);
+      return await this.executeJavaScript(
+        compileResult.javascript!,
+        moduleName,
+        compileResult.allModules,
+        compileResult.ffiFiles,
+      );
     } catch (error) {
       return {
         success: false,
@@ -353,12 +478,17 @@ gleam_stdlib = ">= 0.40.0 and < 2.0.0"
     }
   }
 
-  private async executeJavaScript(jsCode: string, moduleName: string = "main"): Promise<RunResult> {
+  private async executeJavaScript(
+    jsCode: string,
+    moduleName: string = "main",
+    allModules?: Map<string, string>,
+    ffiFiles?: Map<string, string>,
+  ): Promise<RunResult> {
     const output: string[] = [];
 
     try {
       // Try real JavaScript execution first
-      return await this.realJavaScriptExecution(jsCode, moduleName, output);
+      return await this.realJavaScriptExecution(jsCode, moduleName, output, allModules, ffiFiles);
     } catch (error) {
       // Fallback to simulation if real execution fails
       if (this.debug) {
@@ -372,104 +502,188 @@ gleam_stdlib = ">= 0.40.0 and < 2.0.0"
     jsCode: string,
     moduleName: string,
     output: string[],
+    allModules?: Map<string, string>,
+    ffiFiles?: Map<string, string>,
   ): Promise<RunResult> {
+    const tempDir = await Deno.makeTempDir();
+
     try {
-      // Create a temporary directory for module execution
-      const tempDir = await Deno.makeTempDir();
-      const tempFile = `${tempDir}/${moduleName}.mjs`;
+      // Create worker with explicit Deno permissions
+      const workerUrl = new URL("./worker/execution_worker.ts", import.meta.url);
+      const worker = new Worker(workerUrl.href, {
+        type: "module",
+        deno: {
+          permissions: {
+            read: this.workerPermissions.read ?? true,
+            write: this.workerPermissions.write ?? true,
+            net: this.workerPermissions.net ?? true,
+            env: this.workerPermissions.env ?? true,
+            run: false, // Security: no subprocess spawning
+            ffi: false, // Security: no FFI
+          },
+        },
+      });
 
-      // Create gleam.mjs stub that matches Gleam's compiled output
-      const gleamStub = `
-        export class Empty {
-          constructor() {}
-        }
+      // Set up timeout with cleanup
+      let timeoutId: number;
+      const timeoutPromise = new Promise<RunResult>((_, reject) => {
+        timeoutId = setTimeout(() => {
+          worker.terminate();
+          reject(new Error(`Execution timed out after ${this.timeout}ms`));
+        }, this.timeout);
+      });
 
-        export class List {
-          constructor(head, tail) {
-            this.head = head;
-            this.tail = tail;
-          }
+      // Set up message handling
+      const executionPromise = new Promise<RunResult>((resolve) => {
+        worker.onmessage = (event: MessageEvent) => {
+          const response = event.data;
 
-          static fromArray(arr) {
-            if (arr.length === 0) return new Empty();
-            return new List(arr[0], List.fromArray(arr.slice(1)));
-          }
-
-          toArray() {
-            const result = [];
-            let current = this;
-            while (current instanceof List) {
-              result.push(current.head);
-              current = current.tail;
+          if (response.type === "output") {
+            // Streaming output - collect it
+            if (response.line !== undefined) {
+              output.push(response.line);
             }
-            return result;
+          } else if (response.type === "result") {
+            // Execution complete
+            clearTimeout(timeoutId);
+            worker.terminate();
+            resolve({
+              success: true,
+              output: response.output || output,
+              errors: [],
+            });
+          } else if (response.type === "error") {
+            clearTimeout(timeoutId);
+            worker.terminate();
+            resolve({
+              success: false,
+              output,
+              errors: [response.error || "Unknown error"],
+            });
           }
+        };
+
+        worker.onerror = (event) => {
+          clearTimeout(timeoutId);
+          worker.terminate();
+          resolve({
+            success: false,
+            output,
+            errors: [`Worker error: ${event.message}`],
+          });
+        };
+      });
+
+      // Module stubs for the worker
+      const moduleStubs = this.getModuleStubs();
+
+      // Convert allModules Map to object for postMessage serialization
+      const compiledModules: Record<string, string> = {};
+      if (allModules) {
+        for (const [name, code] of allModules) {
+          compiledModules[name] = code;
         }
-
-        export const CustomType = class CustomType {};
-        export const BitArray = class BitArray {};
-        export const UtfCodepoint = class UtfCodepoint {};
-        export function bitArraySlice() { return new BitArray(); }
-        export function bitArraySliceToInt() { return 0; }
-      `;
-
-      // Create io.mjs stub that writes to a file
-      const outputFile = `${tempDir}/output.txt`;
-      const ioStub = `
-        export function println(msg) {
-          Deno.writeTextFileSync("${outputFile}", msg + "\\n", { append: true });
-        }
-      `;
-
-      // Create string.mjs stub
-      const stringStub = `
-        import { Empty, List } from '../gleam.mjs';
-
-        export function split(str, delimiter) {
-          const parts = str.split(delimiter);
-          return List.fromArray(parts);
-        }
-
-        export function trim(str) {
-          return str.trim();
-        }
-      `;
-
-      // Create directories and write stub files
-      await Deno.mkdir(`${tempDir}/gleam`, { recursive: true });
-      await Deno.writeTextFile(`${tempDir}/gleam.mjs`, gleamStub);
-      await Deno.writeTextFile(`${tempDir}/gleam/io.mjs`, ioStub);
-      await Deno.writeTextFile(`${tempDir}/gleam/string.mjs`, stringStub);
-
-      // Write the main module
-      await Deno.writeTextFile(tempFile, jsCode);
-
-      // Execute as ES Module using dynamic import
-      const module = await import(`file://${tempFile}`);
-      if (module.main) {
-        await module.main();
       }
 
-      // Read captured output from file
+      // Convert ffiFiles Map to object for postMessage serialization
+      const ffiFilesObj: Record<string, string> = {};
+      if (ffiFiles) {
+        for (const [path, content] of ffiFiles) {
+          ffiFilesObj[path] = content;
+        }
+      }
+
+      // Send execution request
+      worker.postMessage({
+        type: "execute",
+        payload: {
+          jsCode,
+          moduleName,
+          tempDir,
+          moduleStubs,
+          compiledModules,
+          ffiFiles: ffiFilesObj,
+        },
+      });
+
+      // Race between execution and timeout
+      return await Promise.race([executionPromise, timeoutPromise]);
+    } finally {
+      // Cleanup temp directory
       try {
-        const capturedOutput = await Deno.readTextFile(outputFile);
-        const lines = capturedOutput.trim().split("\n").filter((line) => line.length > 0);
-        output.push(...lines);
+        await Deno.remove(tempDir, { recursive: true });
       } catch {
-        // No output file means no println calls
+        // Ignore cleanup errors
       }
-
-      // Cleanup
-      await Deno.remove(tempDir, { recursive: true });
-
-      return {
-        success: true,
-        output,
-        errors: [],
-      };
-    } catch (error) {
-      throw new Error(`Real execution failed: ${error}`);
     }
+  }
+
+  private getModuleStubs(): {
+    gleam: string;
+    gleamIo: string;
+    gleamString: string;
+  } {
+    return {
+      gleam: `
+export class Empty {
+  constructor() {}
+}
+
+export class List {
+  constructor(head, tail) {
+    this.head = head;
+    this.tail = tail;
+  }
+
+  static fromArray(arr) {
+    if (arr.length === 0) return new Empty();
+    return new List(arr[0], List.fromArray(arr.slice(1)));
+  }
+
+  toArray() {
+    const result = [];
+    let current = this;
+    while (current instanceof List) {
+      result.push(current.head);
+      current = current.tail;
+    }
+    return result;
+  }
+}
+
+export const CustomType = class CustomType {};
+export const BitArray = class BitArray {};
+export const UtfCodepoint = class UtfCodepoint {};
+export function bitArraySlice() { return new BitArray(); }
+export function bitArraySliceToInt() { return 0; }
+`,
+      gleamIo: `
+export function println(msg) {
+  self.postMessage({ type: "output", line: String(msg) });
+}
+
+export function print(msg) {
+  self.postMessage({ type: "output", line: String(msg) });
+}
+
+export function debug(value) {
+  self.postMessage({ type: "output", line: String(value) });
+  return value;
+}
+`,
+      gleamString: `
+import { Empty, List } from '../gleam.mjs';
+
+export function split(str, delimiter) {
+  const parts = str.split(delimiter);
+  return List.fromArray(parts);
+}
+
+export function trim(str) {
+  return str.trim();
+}
+`,
+    };
   }
 
   private async simulateJavaScriptExecution(
@@ -479,7 +693,7 @@ gleam_stdlib = ">= 0.40.0 and < 2.0.0"
   ): Promise<RunResult> {
     try {
       await this.processEchoCalls(jsCode, moduleName, output);
-      await this.processPrintlnCalls(jsCode, output);
+      this.processPrintlnCalls(jsCode, output);
 
       this.logNoOutputWarning(output);
 
@@ -530,7 +744,7 @@ gleam_stdlib = ">= 0.40.0 and < 2.0.0"
     return urlMatch ? urlMatch[1] : FALLBACK_URL;
   }
 
-  private async processPrintlnCalls(jsCode: string, output: string[]): Promise<void> {
+  private processPrintlnCalls(jsCode: string, output: string[]): void {
     if (!jsCode.includes("$io.println")) return;
 
     const printMatches = jsCode.matchAll(PRINTLN_PATTERN);
@@ -636,11 +850,99 @@ gleam_stdlib = ">= 0.40.0 and < 2.0.0"
   }
 
   private async addStandardLibrary(): Promise<void> {
+    // Skip if noStdlib is set
+    if (this.noStdlib) {
+      if (this.debug) {
+        console.log("Skipping standard library loading (--no-stdlib)");
+      }
+      return;
+    }
+
     // Import write_module function
     const { write_module } = await import(`file://${this.wasmPath}/gleam_wasm.js`);
 
-    // Define standard libraries to preload
-    // Each library configuration includes name, base URL, and module list
+    // Wrap write_module to track written modules
+    const trackingWriteModule = (projectId: number, moduleName: string, code: string) => {
+      write_module(projectId, moduleName, code);
+      this.writtenModules.add(moduleName);
+    };
+
+    // Create stdlib loader with config
+    const stdlibLoader = createStdlibLoader(this.standardLibrary, this.debug);
+
+    try {
+      // Load all standard libraries using the new Hex.pm-based loader
+      const result = await stdlibLoader.loadAll(
+        this.standardLibrary,
+        this.projectId,
+        trackingWriteModule,
+      );
+
+      // Collect FFI files from loaded packages
+      if (result.ffiFiles && result.ffiFiles.length > 0) {
+        for (const ffiFile of result.ffiFiles) {
+          this.ffiFiles.set(ffiFile.path, ffiFile.content);
+        }
+        if (this.debug) {
+          console.log(`✓ Collected ${result.ffiFiles.length} FFI files`);
+        }
+      }
+
+      // Log any errors (but don't fail - fallback modules may still work)
+      if (result.errors.length > 0 && this.debug) {
+        for (const error of result.errors) {
+          console.warn(`⚠ ${error}`);
+        }
+      }
+
+      if (this.debug) {
+        console.log(`✓ Loaded ${result.modules.length} modules from standard library`);
+      }
+    } catch (error) {
+      if (this.debug) {
+        console.warn(`⚠ Standard library loading failed: ${error}`);
+        console.log("Attempting fallback loading...");
+      }
+
+      // Fallback to the old GitHub-based loading method
+      await this.addStandardLibraryFallback(trackingWriteModule);
+    }
+
+    // Add a fallback basic gleam/io implementation if stdlib version failed
+    try {
+      // Test if gleam/io was successfully loaded
+      const testCode = 'import gleam/io\npub fn check() { io.println("check") }';
+      trackingWriteModule(this.projectId, "test_io", testCode);
+    } catch {
+      // Fallback implementation
+      const gleamIo = `
+// Fallback gleam/io module implementation
+
+@external(javascript, "console", "log")
+pub fn print(value: a) -> Nil
+
+pub fn println(value: a) -> Nil {
+  print(value)
+}
+
+@external(javascript, "console", "debug")
+pub fn debug(value: a) -> a
+`;
+      trackingWriteModule(this.projectId, "gleam/io", gleamIo);
+
+      if (this.debug) {
+        console.log("✓ Using fallback gleam/io implementation");
+      }
+    }
+  }
+
+  /**
+   * Fallback method using GitHub raw URLs (for when Hex.pm is unavailable)
+   */
+  private async addStandardLibraryFallback(
+    write_module: (projectId: number, moduleName: string, code: string) => void,
+  ): Promise<void> {
+    // Define standard libraries to preload (old GitHub-based approach)
     const standardLibraries = [
       {
         name: "gleam_stdlib",
@@ -689,20 +991,6 @@ gleam_stdlib = ">= 0.40.0 and < 2.0.0"
         ],
       },
       {
-        name: "dinostore",
-        baseUrl: "https://raw.githubusercontent.com/MystPi/dinostore/main/src",
-        modules: [
-          "dinostore.gleam",
-        ],
-      },
-      {
-        name: "gleam_stdin",
-        baseUrl: "https://raw.githubusercontent.com/Olian04/gleam_stdin/main/src",
-        modules: [
-          "gleam_stdin.gleam",
-        ],
-      },
-      {
         name: "gleam_http",
         baseUrl: "https://raw.githubusercontent.com/gleam-lang/http/main/src",
         modules: [
@@ -734,33 +1022,6 @@ gleam_stdlib = ">= 0.40.0 and < 2.0.0"
     await Promise.all(
       standardLibraries.map((library) => this.loadLibraryModules(library, write_module)),
     );
-
-    // Add a fallback basic gleam/io implementation if stdlib version failed
-    try {
-      // Test if gleam/io was successfully loaded
-      const testCode = 'import gleam/io\npub fn check() { io.println("check") }';
-      write_module(this.projectId, "test_io", testCode);
-    } catch {
-      // Fallback implementation
-      const gleamIo = `
-// Fallback gleam/io module implementation
-
-@external(javascript, "console", "log")
-pub fn print(value: a) -> Nil
-
-pub fn println(value: a) -> Nil {
-  print(value)
-}
-
-@external(javascript, "console", "debug") 
-pub fn debug(value: a) -> a
-`;
-      write_module(this.projectId, "gleam/io", gleamIo);
-
-      if (this.debug) {
-        console.log("✓ Using fallback gleam/io implementation");
-      }
-    }
   }
 
   private async addPreloadScripts(): Promise<void> {
@@ -801,8 +1062,9 @@ pub fn debug(value: a) -> a
         }
       }
 
-      // Write the module
+      // Write the module and track it
       write_module(this.projectId, script.moduleName, code);
+      this.writtenModules.add(script.moduleName);
 
       if (this.debug) {
         console.log(`Preloaded module: ${script.moduleName}`);

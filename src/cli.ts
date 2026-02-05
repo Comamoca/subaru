@@ -4,6 +4,7 @@ import { parseArgs } from "https://deno.land/std@0.218.0/cli/parse_args.ts";
 import Subaru from "./subaru_runner.ts";
 import { createExampleConfig, loadConfig, saveConfig, type SubaruConfigFile } from "./config.ts";
 import { cleanAllCache } from "./setup.ts";
+import { cleanPackageCache } from "./hex/mod.ts";
 
 interface CliOptions {
   help: boolean;
@@ -21,6 +22,8 @@ interface CliOptions {
   "show-warnings"?: boolean;
   "warning-color"?: string;
   "clean-cache"?: boolean;
+  "clean-package-cache"?: boolean;
+  "no-stdlib"?: boolean;
   _: string[];
 }
 
@@ -50,7 +53,9 @@ OPTIONS:
     --no-warnings           Suppress compiler warnings (default)
     --show-warnings         Show compiler warnings
     --warning-color <COLOR> Set warning color (red|yellow|green|blue|magenta|cyan|white|gray)
-    --clean-cache           Remove cache directory
+    --clean-cache           Remove all cache directories
+    --clean-package-cache   Remove only the package cache (Hex.pm packages)
+    --no-stdlib             Disable loading of builtin standard library packages
 
 EXAMPLES:
     subaru hello.gleam      # Execute file directly
@@ -72,7 +77,11 @@ EXAMPLES:
 
     subaru --config my-config.json script.gleam
 
-    subaru --clean-cache    # Remove cache directory
+    subaru --clean-cache    # Remove all cache directories
+
+    subaru --clean-package-cache    # Remove Hex.pm package cache only
+
+    subaru --no-stdlib --code "pub fn main() { 42 }"    # Run without standard library
 `;
 
 async function runFromFile(filePath: string, config: SubaruConfigFile): Promise<void> {
@@ -195,6 +204,8 @@ async function main(): Promise<void> {
       "no-warnings",
       "show-warnings",
       "clean-cache",
+      "clean-package-cache",
+      "no-stdlib",
     ],
     string: ["file", "code", "url", "wasm-path", "log-level", "config", "warning-color"],
     alias: {
@@ -223,6 +234,19 @@ async function main(): Promise<void> {
     } catch (error) {
       console.error(
         "❌ Failed to clean cache:",
+        error instanceof Error ? error.message : String(error),
+      );
+      Deno.exit(1);
+    }
+  }
+
+  if (args["clean-package-cache"]) {
+    try {
+      await cleanPackageCache();
+      return;
+    } catch (error) {
+      console.error(
+        "❌ Failed to clean package cache:",
         error instanceof Error ? error.message : String(error),
       );
       Deno.exit(1);
@@ -270,6 +294,8 @@ async function main(): Promise<void> {
         ? true
         : (fileConfig.noWarnings !== undefined ? fileConfig.noWarnings : true)),
     warningColor: args["warning-color"] || fileConfig.warningColor || "yellow",
+    noStdlib: args["no-stdlib"] !== undefined ? args["no-stdlib"] : fileConfig.noStdlib,
+    standardLibrary: fileConfig.standardLibrary,
   };
 
   // Check for positional arguments (file paths)

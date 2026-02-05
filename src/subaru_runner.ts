@@ -1,9 +1,7 @@
 import { GleamRunner } from "./gleam_runner.ts";
 import type { CompileResult, GleamRunnerConfig, RunResult } from "./gleam_runner.ts";
 
-export interface SubaruConfig extends GleamRunnerConfig {
-  timeout?: number;
-}
+export type SubaruConfig = GleamRunnerConfig;
 
 export class Subaru {
   private runner: GleamRunner;

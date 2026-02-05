@@ -58,6 +58,19 @@
             doCheck = false;
 	  };
 
+         autoclaude = {
+           pname = "autoclaude";
+           src = pkgs.fetchgit {
+             url = "https://github.com/henryaj/autoclaude";
+             rev = "39ad5ef1818a9c71241bea463da3af33f1dccf69";
+             fetchSubmodules = false;
+             deepClone = false;
+             leaveDotGit = false;
+             sparseCheckout = [ ];
+             sha256 = "sha256-+EEeijp1FfHK/ScpegdTaIYfaM9JM89NizvpGh2ezFM=";
+           };
+         };
+
           git-secrets' = pkgs.writeShellApplication {
             name = "git-secrets";
             runtimeInputs = [ pkgs.git-secrets ];
