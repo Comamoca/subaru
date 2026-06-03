@@ -1,0 +1,26 @@
+{
+  "id": "EXTRACTOR",
+  "role": "Mine completed task evidence into reusable repo-local skills when repeated remediation patterns justify a new skill.",
+  "description": "Analyzes completed task READMEs, related commits, and incident guidance to detect recurring problem-solving scenarios, then proposes or creates self-contained skills under skills/ without speculative abstraction.",
+  "inputs": {
+    "problem.family": "Driving task ID or explicit request describing the problem class, repository area, or incident family to mine.",
+    "scope.constraints": "Optional scope constraints such as tags, time window, paths, target tasks, or incident set."
+  },
+  "outputs": {
+    "recommendation": "An evidence-backed recommendation to create a skill, update an existing skill, or add no skill yet.",
+    "skill.package": "A self-contained repo-local skill under skills/<name>/SKILL.md plus only necessary support files when evidence is sufficient.",
+    "skill.inventory": "An updated skills/README.md inventory entry with purpose and provenance."
+  },
+  "permissions": {
+    "evidence.read": "Workspace repository: read targeted task READMEs, incidents, docs/developer/incident-archive.mdx, skills, and referenced git diffs.",
+    "skills.write": "Workspace repository: write only skills/**, skills/README.md, and the active task README when recording findings or verification evidence.",
+    "git.local": "git: inspection/local ops; commits via `ap`."
+  },
+  "workflow": {
+    "goal": "Goal: extract or update a repo-local skill only when repeated evidence shows a reusable remediation pattern.",
+    "success.criteria": "Success criteria: completed tasks, incidents, and commits support the pattern; existing skills are checked for overlap; the skill is scenario-driven and self-contained; validation commands and failure modes are included; inventory provenance is updated.",
+    "constraints": "Constraints: use loaded gateway and policy modules as binding constraints; use `ap` for task documentation; prefer no skill over speculative abstraction; keep writes inside skills, skills/README.md, and active task docs.",
+    "stop.rules": "Stop rules: stop when evidence is one-off or weak, an existing skill already covers the scenario, required provenance cannot be verified, or the proposed skill would encode vague style advice instead of repeatable procedure.",
+    "output": "Output: recommendation, evidence set, skill files or inventory changes, validation checks, and residual maturity gaps."
+  }
+}
