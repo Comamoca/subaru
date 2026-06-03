@@ -1,0 +1,389 @@
+#+TITLE: Subaru リファクタリング計画
+#+DATE: 2026-05-30
+#+AUTHOR: Claude
+
+* 概要
+
+コードベース全体を調査した結果、独立して並行実施できる4つのトラックに問題を分類した。
+各トラックの前提関係を示す: A2完了後にB2が実施可能。それ以外は独立して着手できる。
+
+* 依存関係図
+
+#+BEGIN_SRC
+Track A (アーキテクチャ)
+  A1 ──────────────────────────────── 独立
+  A2 ──┬──────────────────────────── 独立
+       └── B2 に必要
+
+Track B (コード品質)
+  B1 ──────────────────────────────── 独立
+  B2 ──────────────── A2 完了後に着手
+  B3 ──────────────────────────────── 独立
+
+Track C (Worker改善)
+  C1 ──────────────────────────────── 独立
+  C2 ──────────────────────────────── 独立
+
+Track D (細かい修正)
+  D1, D2, D3 ─────────────────────── すべて独立
+#+END_SRC
+
+* Track A: アーキテクチャ問題 (高優先度)
+
+** A1: シミュレーションフォールバックの完全削除
+:PROPERTIES:
+:FILE: src/gleam_runner.ts
+:LINES: 489-804
+:PRIORITY: 最高
+:END:
+
+*** 問題
+CLAUDE.md に「NEVER use simulation」と明記されているにもかかわらず、
+=simulateJavaScriptExecution= が実行失敗時のフォールバックとして残っている。
+
+フォールバック内で正規表現を使って生成済みJSコードをパースし出力を「推測」する手法は
+根本的に誤っており、誤った結果を返す可能性がある。
+
+関連メソッド (すべて削除対象):
+- =simulateJavaScriptExecution= (L689)
+- =processEchoCalls= (L714)
+- =processPrintlnCalls= (L747)
+- =handleHttpResponseEcho= (L736)
+- =extractUrlFromCode= (L742)
+- =formatEchoValue= (L796)
+- =simulateHttpFetch= (L765)
+- =escapeForJsonString= (L787)
+- 定数 =FALLBACK_URL= (L52), =ECHO_CALL_PATTERN=, =PRINTLN_PATTERN=, =URL_EXTRACTION_PATTERN= (L55-57)
+
+*** 対応
+=executeJavaScript= メソッドを単純化し、実行失敗時はエラーをそのまま上位に伝播させる。
+
+#+BEGIN_SRC typescript
+private async executeJavaScript(
+  jsCode: string,
+  moduleName: string = "main",
+  allModules?: Map<string, string>,
+  ffiFiles?: Map<string, string>,
+): Promise<RunResult> {
+  return await this.realJavaScriptExecution(jsCode, moduleName, [], allModules, ffiFiles);
+}
+#+END_SRC
+
+** A2: WASMモジュール管理クラスの分離
+:PROPERTIES:
+:FILE: src/gleam_runner.ts → src/wasm/wasm_module.ts (新規)
+:LINES: 1-140, 181-252, 277-452
+:PRIORITY: 高
+:END:
+
+*** 問題
+=GleamRunner= クラス (1074行) が以下の責務をすべて持っている:
+- WASMコンパイラのパス解決・ダウンロード
+- WASMモジュールの初期化
+- コンパイル処理
+- 実行処理
+- stdlib読み込み
+- preloadスクリプト管理
+- ログ/警告制御
+
+単一責任原則に違反しており、テストが困難。
+
+*** 問題箇所
+=compile= メソッド内で毎回動的importを3回実行している (L292, L319, L343):
+
+#+BEGIN_SRC typescript
+// 毎回のcompile呼び出しで重複実行される
+const { reset_filesystem, write_module, ... } = await import(`file://${this.wasmPath}/gleam_wasm.js`);
+// ...
+const { write_file } = await import(`file://${this.wasmPath}/gleam_wasm.js`);
+// ...
+const { read_file_bytes } = await import(`file://${this.wasmPath}/gleam_wasm.js`);
+#+END_SRC
+
+*** 対応
+新ファイル =src/wasm/wasm_module.ts= を作成し =WasmModule= クラスを定義:
+
+#+BEGIN_SRC typescript
+// src/wasm/wasm_module.ts
+export class WasmModule {
+  private api: WasmApi; // initialize()時に一度だけロード
+
+  async initialize(wasmPath: string): Promise<void>
+  resetFilesystem(projectId: number): void
+  writeModule(projectId: number, name: string, code: string): void
+  compile(projectId: number, target: "javascript" | "erlang"): void
+  readCompiledJavaScript(projectId: number, name: string): string | undefined
+  popWarning(projectId: number): string | undefined
+}
+#+END_SRC
+
+=GleamRunner= はこれを利用するだけにし、動的importを排除する。
+
+** A3: stdlib_loader の冗長なconfig引数を削除
+:PROPERTIES:
+:FILE: src/stdlib/stdlib_loader.ts
+:LINES: 143-185
+:PRIORITY: 中
+:END:
+
+*** 問題
+=StdlibLoader= コンストラクタが =config= を受け取るにも関わらず、
+=loadAll(config, projectId, writeModule)= が再度 =config= を引数に取っている。
+
+#+BEGIN_SRC typescript
+// コンストラクタで既にconfigを受け取っているのに
+constructor(config: StandardLibraryConfig = {}, debug: boolean = false)
+
+// loadAllでも再度受け取る (冗長)
+async loadAll(config: StandardLibraryConfig, projectId: number, writeModule: WriteModuleFn)
+#+END_SRC
+
+また =gleam_runner.ts= の =addStandardLibraryFallback= (L942-1025) と
+=stdlib_loader.ts= の =loadPackageFromGitHub= (L296-345) でGitHubフォールバックが重複実装されている。
+
+*** 対応
+- =loadAll= の =config= 引数を削除し、コンストラクタで受け取ったものを使う
+- =gleam_runner.ts= の =addStandardLibraryFallback= を完全削除し、
+  =StdlibLoader.loadPackageFromGitHub= に一本化する
+
+* Track B: コード品質問題
+
+** B1: グローバルconsole汚染の修正
+:PROPERTIES:
+:FILE: src/gleam_runner.ts
+:LINES: 212-253
+:PRIORITY: 高
+:END:
+
+*** 問題
+=setupLogging= がグローバルの =console.log= を上書きしている:
+
+#+BEGIN_SRC typescript
+console.log = silentLog;  // グローバル状態を変更
+console.debug = () => {};
+console.info = () => {};
+#+END_SRC
+
+これにより:
+- テストで副作用が発生する
+- 他のモジュールのログ出力に影響する
+- 元に戻す仕組みが =__originalConsole= という非型安全な形で実装されている
+- "silent"と"error"レベルで全く同じフィルタロジックが重複している (L221-232, L236-248)
+
+*** 対応
+グローバル汚染をやめ、ロガー抽象を導入する:
+
+#+BEGIN_SRC typescript
+// src/logger.ts
+export class Logger {
+  constructor(private level: LogLevel) {}
+  log(...args: unknown[]): void
+  warn(...args: unknown[]): void
+  debug(...args: unknown[]): void
+}
+#+END_SRC
+
+=GleamRunner= 内で =this.logger= を使うように変更し、グローバルconsole操作を排除。
+
+** B2: 動的importのキャッシュ (A2完了後)
+:PROPERTIES:
+:FILE: src/gleam_runner.ts
+:DEPENDS: A2
+:PRIORITY: 中
+:END:
+
+*** 問題
+A2 で対応する動的import重複の問題。A2の =WasmModule= クラス実装で自然に解決される。
+B2はA2の副産物として得られるため、A2完了後に確認作業のみ行う。
+
+** B3: モジュールスタブの外部化
+:PROPERTIES:
+:FILE: src/gleam_runner.ts (L621-686), src/worker/execution_worker.ts (L61-195)
+:PRIORITY: 中
+:END:
+
+*** 問題
+=gleam_runner.ts= の =getModuleStubs()= (L621) と
+=execution_worker.ts= のインラインJS文字列 (L61-195) で合計200行以上のJSコードが
+文字列リテラルとして埋め込まれており:
+- シンタックスハイライトが効かない
+- コード補完が効かない
+- テストが困難
+
+*** 対応
+#+BEGIN_SRC
+src/worker/stubs/
+  gleam.mjs       # Gleam基本型 (Empty, List, CustomType等)
+  gleam_io.mjs    # io.println等
+  gleam_stdlib.mjs # stdlib FFI実装
+#+END_SRC
+
+Deno の =import.meta.url= を使ってビルド時にファイルとして読み込む、
+もしくは =URL= でstaticにimportする形に変更。
+
+* Track C: Worker改善
+
+** C1: ファイルベース出力キャプチャの廃止
+:PROPERTIES:
+:FILE: src/worker/execution_worker.ts
+:LINES: 62-70, 239-247
+:PRIORITY: 中
+:END:
+
+*** 問題
+現在の出力キャプチャは一時ファイル経由で行われている:
+
+#+BEGIN_SRC typescript
+// worker内でファイルに書き込み
+const __outputPath = "${outputFile}";
+function __captureOutput(msg) {
+  Deno.writeTextFileSync(__outputPath, line + "\n", { append: true });
+}
+// ...
+// 実行後にファイルを読む
+const fileOutput = await Deno.readTextFile(outputFile);
+#+END_SRC
+
+この手法は:
+- ディスクI/Oが不必要に発生する
+- ファイルパスをJS文字列に埋め込む (インジェクションリスク)
+- =gleam_runner.ts= 側でtempDirの作成・削除が必要
+
+この手法を置き換える =postMessage= 版の実装は =gleam_runner.ts= の =getModuleStubs().gleamIo=
+(L660-672) に定義されているが、worker は受け取った =moduleStubs.gleamIo= を使っておらず、
+自前のファイルベース =gleamStdlibStub= (L61-69) で上書きしているため実際には使われていない。
+
+*** 対応
+=execution_worker.ts= のハードコードされた =gleamStdlibStub= を削除し、
+=moduleStubs.gleamIo= を =gleam_stdlib.mjs= として書き込む形に切り替える。
+これにより =print= / =println= が =self.postMessage({ type: "output", line })= を
+経由するようになり、tempFileとoutputFileを廃止できる。
+Worker側のtempDirはモジュール書き込み用途のみに縮小 (→ C2でさらに改善)。
+
+** C2: Worker内モジュール書き込みの最適化
+:PROPERTIES:
+:FILE: src/worker/execution_worker.ts
+:LINES: 200-231
+:PRIORITY: 低
+:END:
+
+*** 問題
+コンパイル済みモジュールを毎回tempDirにファイルとして書き込んでから
+=import()= で読み込んでいる。大量モジュール (stdlib含む) で多数のファイルI/Oが発生。
+
+*** 対応
+Data URLを使ったインメモリimportを検討:
+
+#+BEGIN_SRC typescript
+// ファイルに書かずにData URLでimport
+const blob = new Blob([moduleCode], { type: "text/javascript" });
+const url = URL.createObjectURL(blob);
+const mod = await import(url);
+#+END_SRC
+
+ただしDenoのWorker環境でのBlob URL対応状況を確認した上で実施する。
+対応していない場合はファイルベースを維持。
+
+* Track D: 細かい修正 (すべて独立)
+
+** D1: resolveWasmPath の優先順序修正
+:PROPERTIES:
+:FILE: src/gleam_runner.ts
+:LINES: 93-139
+:PRIORITY: 低
+:END:
+
+*** 問題
+コメントには「configPath → ./wasm-compiler → cache → auto-download」と書かれているが
+実際のコードは「configPath → cache → local → auto-download」の順で動いている。
+
+#+BEGIN_SRC typescript
+// コメント: Priority: configPath -> ./wasm-compiler -> cache -> auto-download
+// 実装: configPath -> cache -> localPath -> auto-download  ← 不一致
+const cachePath = getWasmCacheDir();
+if (await wasmExists(cachePath)) { return cachePath; }     // cacheが先
+
+const localPath = `${Deno.cwd()}/wasm-compiler`;
+if (await wasmExists(localPath)) { return localPath; }     // localが後
+#+END_SRC
+
+*** 対応
+コードとコメントを一致させる。localPathを先にチェックする方が自然
+(ユーザーが明示的に配置したファイルを優先すべき)ため、コードを修正:
+
+#+BEGIN_SRC typescript
+// 2. Check local ./wasm-compiler directory (user-placed, takes priority over cache)
+// 3. Check cache directory
+#+END_SRC
+
+** D2: addStandardLibrary の test_io ハックの削除
+:PROPERTIES:
+:FILE: src/gleam_runner.ts
+:LINES: 912-936
+:PRIORITY: 中
+:END:
+
+*** 問題
+stdlib読み込み後に =test_io= という無意味なモジュールを書き込んで
+gleam/ioが使えるかをテストしている:
+
+#+BEGIN_SRC typescript
+try {
+  const testCode = 'import gleam/io\npub fn check() { io.println("check") }';
+  trackingWriteModule(this.projectId, "test_io", testCode);  // 副作用あり
+} catch {
+  // フォールバックio実装を追加
+}
+#+END_SRC
+
+このコードは =write_module= が例外を投げるかどうかで判定しようとしているが、
+=write_module= はファイル書き込みであり、gleam/ioのロード成否とは無関係。
+=writtenModules= にも "test_io" が混入する問題もある。
+
+*** 対応
+=StdlibLoader= が =LoadResult.errors= を返すため、それを使ってロード成否を判定する。
+フォールバックio追加は =StdlibLoader.addFallbackIo= を明示的に呼ぶ形に変更。
+
+** D3: config.ts の型安全性修正
+:PROPERTIES:
+:FILE: src/config.ts
+:LINES: 44
+:PRIORITY: 低
+:END:
+
+*** 問題
+catchブロック内の =error= が型なしで =error.message= にアクセスしている:
+
+#+BEGIN_SRC typescript
+} catch (error) {
+  // If user specified a config path and it failed, throw error
+  throw new Error(`Failed to load config from ${configPath}: ${error.message}`);
+  //                                                            ^^^^ 型unsafe
+}
+#+END_SRC
+
+*** 対応
+#+BEGIN_SRC typescript
+throw new Error(
+  `Failed to load config from ${configPath}: ${error instanceof Error ? error.message : String(error)}`
+);
+#+END_SRC
+
+* 実施順序の推奨
+
+| 順序 | タスク | 担当者A  | 担当者B   |
+|------+--------+---------+----------|
+|    1 | 並行   | A1       | D1,D2,D3 |
+|    2 | 並行   | A2       | B1, C1   |
+|    3 | 依存   | B2(A2後) | B3, C2  |
+|    4 | 統合   | A3       | -       |
+
+* 期待される効果
+
+| 指標             | 現在      | 目標      |
+|------------------+-----------+-----------|
+| gleam_runner.ts  | 1074行    | ~400行    |
+| グローバル副作用  | console汚染| なし     |
+| 動的import回数   | compile毎3回| 初期化1回 |
+| テスト容易性     | 低        | 高        |
+| シミュレーション | 残存      | 完全削除  |

@@ -4,3 +4,8 @@
 erl_crash.dump
 .devenv
 .direnv
+/.agent-shell/
+
+.agentplane/cache.sqlite
+.agentplane/cache.sqlite-wal
+.agentplane/cache.sqlite-shm
