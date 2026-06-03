@@ -1,5 +1,9 @@
 import { downloadGleamWasmToPath, getWasmCacheDir } from "./setup.ts";
+import { Logger, type LogLevel } from "./logger.ts";
+import { WasmModule } from "./wasm/wasm_module.ts";
 import { createStdlibLoader, type StandardLibraryConfig } from "./stdlib/mod.ts";
+
+const STUBS_DIR = new URL("./worker/stubs/", import.meta.url);
 
 export interface CompileResult {
   success: boolean;
@@ -21,7 +25,7 @@ export interface RunResult {
 
 export interface PreloadScript {
   moduleName: string;
-  code: string;
+  code?: string;
   url?: string;
   filePath?: string;
 }
@@ -36,7 +40,7 @@ export interface WorkerPermissions {
 export interface GleamRunnerConfig {
   wasmPath?: string;
   debug?: boolean;
-  logLevel?: "silent" | "error" | "warn" | "info" | "debug" | "trace";
+  logLevel?: LogLevel;
   preloadScripts?: PreloadScript[];
   noWarnings?: boolean;
   warningColor?: "red" | "yellow" | "green" | "blue" | "magenta" | "cyan" | "white" | "gray";
@@ -46,15 +50,9 @@ export interface GleamRunnerConfig {
   timeout?: number;
 }
 
-// Constants for default values and patterns
+// Constants for default values
 const DEFAULT_LOG_LEVEL = "silent";
 const DEFAULT_WARNING_COLOR = "yellow";
-const FALLBACK_URL = "https://example.com";
-
-// Regex patterns for code analysis
-const ECHO_CALL_PATTERN = /echo\(([^,]+),\s*"([^"]*)",\s*(\d+)\)/g;
-const PRINTLN_PATTERN = /\$io\.println\(([^)]+)\)/g;
-const URL_EXTRACTION_PATTERN = /\$request\.to\("([^"]+)"\)/;
 
 // ANSI color codes
 const colors = {
@@ -110,22 +108,22 @@ async function resolveWasmPath(configPath?: string, debug: boolean = false): Pro
     }
   }
 
-  // 2. Check cache directory (priority over local)
-  const cachePath = getWasmCacheDir();
-  if (await wasmExists(cachePath)) {
-    if (debug) {
-      console.log(`Using WASM compiler from cache: ${cachePath}`);
-    }
-    return cachePath;
-  }
-
-  // 3. Check local ./wasm-compiler directory (fallback)
+  // 2. Check local ./wasm-compiler directory (user-placed, takes priority over cache)
   const localPath = `${Deno.cwd()}/wasm-compiler`;
   if (await wasmExists(localPath)) {
     if (debug) {
       console.log(`Using WASM compiler from local directory: ${localPath}`);
     }
     return localPath;
+  }
+
+  // 3. Check cache directory
+  const cachePath = getWasmCacheDir();
+  if (await wasmExists(cachePath)) {
+    if (debug) {
+      console.log(`Using WASM compiler from cache: ${cachePath}`);
+    }
+    return cachePath;
   }
 
   // 4. Auto-download to cache
@@ -144,10 +142,10 @@ const DEFAULT_TIMEOUT = 30000;
 
 export class GleamRunner {
   private wasmPath: string;
-  private wasmModule: unknown;
+  private wasm: WasmModule = new WasmModule();
   private projectId: number = 0;
   private debug: boolean;
-  private logLevel: string;
+  private logger: Logger;
   private preloadScripts: PreloadScript[];
   private noWarnings: boolean;
   private warningColor: string;
@@ -155,6 +153,12 @@ export class GleamRunner {
   private standardLibrary: StandardLibraryConfig;
   private workerPermissions: WorkerPermissions;
   private timeout: number;
+  // Module stubs loaded from external files
+  private moduleStubs: {
+    gleam: string;
+    gleamIo: string;
+    gleamString: string;
+  } = { gleam: "", gleamIo: "", gleamString: "" };
   // Track all module names written during compilation
   private writtenModules: Set<string> = new Set();
   // Track FFI files collected during stdlib loading
@@ -163,7 +167,7 @@ export class GleamRunner {
   constructor(config: GleamRunnerConfig = {}) {
     this.wasmPath = config.wasmPath || "";
     this.debug = config.debug || false;
-    this.logLevel = config.logLevel || DEFAULT_LOG_LEVEL;
+    this.logger = new Logger(config.logLevel || DEFAULT_LOG_LEVEL);
     this.preloadScripts = config.preloadScripts || [];
     this.noWarnings = config.noWarnings !== undefined ? config.noWarnings : true;
     this.warningColor = config.warningColor || DEFAULT_WARNING_COLOR;
@@ -176,79 +180,33 @@ export class GleamRunner {
       env: true,
     };
     this.timeout = config.timeout || DEFAULT_TIMEOUT;
+    this.loadModuleStubs();
+  }
+
+  private loadModuleStubs(): void {
+    const resolveStub = (name: string): string => {
+      const url = new URL(name, STUBS_DIR);
+      return Deno.readTextFileSync(url);
+    };
+    this.moduleStubs = {
+      gleam: resolveStub("gleam.mjs"),
+      gleamIo: resolveStub("gleam_io.mjs"),
+      gleamString: resolveStub("gleam_string.mjs"),
+    };
   }
 
   async initialize(): Promise<void> {
     try {
-      // Set up logging filter to control debug output
-      this.setupLogging();
-
       // Resolve WASM path (with auto-download if needed)
       this.wasmPath = await resolveWasmPath(this.wasmPath, this.debug);
 
-      if (this.debug) {
-        console.log(`WASM compiler location: ${this.wasmPath}`);
-      }
+      this.logger.debug(`WASM compiler location: ${this.wasmPath}`);
 
-      // Import the WASM module
-      const wasmModulePath = `file://${this.wasmPath}/gleam_wasm.js`;
-      const { default: init, initialise_panic_hook } = await import(wasmModulePath);
+      await this.wasm.initialize(this.wasmPath, this.debug);
 
-      // Initialize with WASM file
-      const wasmFile = await Deno.readFile(`${this.wasmPath}/gleam_wasm_bg.wasm`);
-      this.wasmModule = await init({ module_or_path: wasmFile });
-
-      // Initialize panic hook for better error reporting
-      initialise_panic_hook(this.debug);
-
-      if (this.debug) {
-        console.log("Gleam WASM compiler initialized successfully");
-      }
+      this.logger.debug("Gleam WASM compiler initialized successfully");
     } catch (error) {
       throw new Error(`Failed to initialize Gleam WASM compiler: ${error}`);
-    }
-  }
-
-  private setupLogging(): void {
-    // Filter only internal debug logs from WASM compiler, not user output
-    if (!this.debug && this.logLevel !== "trace") {
-      // Store original console methods
-      const originalConsole = { ...console };
-
-      // Create filtered console that only affects WASM debug output
-      if (this.logLevel === "silent") {
-        // Silence all internal logs but preserve user println output
-        const silentLog = (...args: unknown[]) => {
-          // Allow through only basic output, not TRACE/DEBUG/INFO prefixed logs
-          const message = args.join(" ");
-          if (
-            !message.includes("TRACE ") && !message.includes("DEBUG ") &&
-            !message.includes("INFO ") && !message.includes("compiler-")
-          ) {
-            originalConsole.log(...args);
-          }
-        };
-        console.log = silentLog;
-        console.debug = () => {};
-        console.info = () => {};
-      } else if (this.logLevel === "error") {
-        // Filter out TRACE, DEBUG, INFO but keep warnings and errors
-        const errorLog = (...args: unknown[]) => {
-          const message = args.join(" ");
-          if (
-            !message.includes("TRACE ") && !message.includes("DEBUG ") &&
-            !message.includes("INFO ") && !message.includes("compiler-")
-          ) {
-            originalConsole.log(...args);
-          }
-        };
-        console.log = errorLog;
-        console.debug = () => {};
-        console.info = () => {};
-      }
-
-      // Store original console for restoration if needed
-      (globalThis as Record<string, unknown>).__originalConsole = originalConsole;
     }
   }
 
@@ -269,31 +227,20 @@ export class GleamRunner {
     warnings.forEach((warning) => {
       const formattedWarning = this.formatWarning(warning);
       if (formattedWarning) {
-        console.warn(formattedWarning);
+        this.logger.warn(formattedWarning);
       }
     });
   }
 
   async compile(gleamCode: string, moduleName: string = "main"): Promise<CompileResult> {
-    if (!this.wasmModule) {
+    if (!this.wasm.isInitialized) {
       throw new Error("Compiler not initialized. Call initialize() first.");
     }
 
     try {
-      // Import the functions we need
-      const {
-        reset_filesystem,
-        write_module,
-        compile_package,
-        read_compiled_javascript,
-        read_compiled_erlang,
-        pop_warning,
-        reset_warnings,
-      } = await import(`file://${this.wasmPath}/gleam_wasm.js`);
-
       // Reset filesystem and warnings
-      reset_filesystem(this.projectId);
-      reset_warnings(this.projectId);
+      this.wasm.resetFilesystem(this.projectId);
+      this.wasm.resetWarnings(this.projectId);
 
       // Clear tracked modules and FFI files for this compilation
       this.writtenModules.clear();
@@ -305,8 +252,8 @@ export class GleamRunner {
       // Add preload scripts
       await this.addPreloadScripts();
 
-      // Write the Gleam code to a module (write_module automatically adds .gleam extension)
-      write_module(this.projectId, moduleName, gleamCode);
+      // Write the Gleam code to a module
+      this.wasm.writeModule(this.projectId, moduleName, gleamCode);
       this.writtenModules.add(moduleName);
 
       // Write a basic gleam.toml
@@ -316,19 +263,18 @@ version = "1.0.0"
 [dependencies]
 gleam_stdlib = ">= 0.40.0 and < 2.0.0"
 `;
-      const { write_file } = await import(`file://${this.wasmPath}/gleam_wasm.js`);
-      write_file(this.projectId, "gleam.toml", gleamToml);
+      this.wasm.writeFile(this.projectId, "gleam.toml", gleamToml);
 
       const warnings: string[] = [];
       const errors: string[] = [];
 
       try {
         // Compile to JavaScript target
-        compile_package(this.projectId, "javascript");
+        this.wasm.compile(this.projectId, "javascript");
 
         // Collect warnings
         let warning;
-        while ((warning = pop_warning(this.projectId)) !== undefined) {
+        while ((warning = this.wasm.popWarning(this.projectId)) !== undefined) {
           warnings.push(warning);
         }
 
@@ -336,18 +282,15 @@ gleam_stdlib = ">= 0.40.0 and < 2.0.0"
         this.displayWarnings(warnings);
 
         // Read compiled output for main module
-        const javascript = read_compiled_javascript(this.projectId, moduleName);
-        const erlang = read_compiled_erlang(this.projectId, moduleName);
+        const javascript = this.wasm.readCompiledJavaScript(this.projectId, moduleName);
+        const erlang = this.wasm.readCompiledErlang(this.projectId, moduleName);
 
-        // Import read_file_bytes for reading runtime files
-        const { read_file_bytes } = await import(`file://${this.wasmPath}/gleam_wasm.js`);
         const decoder = new TextDecoder();
 
         // Read all compiled JavaScript modules
         const allModules = new Map<string, string>();
 
-        // First, try to read gleam_stdlib.mjs (the Gleam runtime)
-        // Try multiple possible paths
+        // Try to read gleam_stdlib.mjs (the Gleam runtime) from multiple possible paths
         const runtimePaths = [
           "/build/gleam_stdlib.mjs",
           "build/gleam_stdlib.mjs",
@@ -358,14 +301,12 @@ gleam_stdlib = ">= 0.40.0 and < 2.0.0"
 
         for (const runtimePath of runtimePaths) {
           try {
-            const stdlibBytes = read_file_bytes(this.projectId, runtimePath);
+            const stdlibBytes = this.wasm.readFileBytes(this.projectId, runtimePath);
             if (stdlibBytes && stdlibBytes.length > 0) {
               allModules.set("gleam_stdlib", decoder.decode(stdlibBytes));
-              if (this.debug) {
-                console.log(
-                  `✓ Read gleam_stdlib.mjs from ${runtimePath} (${stdlibBytes.length} bytes)`,
-                );
-              }
+              this.logger.debug(
+                `✓ Read gleam_stdlib.mjs from ${runtimePath} (${stdlibBytes.length} bytes)`,
+              );
               break;
             }
           } catch {
@@ -373,11 +314,11 @@ gleam_stdlib = ">= 0.40.0 and < 2.0.0"
           }
         }
 
-        if (!allModules.has("gleam_stdlib") && this.debug) {
-          console.log("⚠ Could not find gleam_stdlib.mjs - will use prelude stub");
+        if (!allModules.has("gleam_stdlib")) {
+          this.logger.debug("⚠ Could not find gleam_stdlib.mjs - will use prelude stub");
         }
 
-        // Read gleam.mjs (the Gleam prelude/runtime) - this is essential for type definitions
+        // Read gleam.mjs (the Gleam prelude/runtime)
         const preludePaths = [
           "/build/gleam.mjs",
           "build/gleam.mjs",
@@ -385,14 +326,12 @@ gleam_stdlib = ">= 0.40.0 and < 2.0.0"
 
         for (const preludePath of preludePaths) {
           try {
-            const preludeBytes = read_file_bytes(this.projectId, preludePath);
+            const preludeBytes = this.wasm.readFileBytes(this.projectId, preludePath);
             if (preludeBytes && preludeBytes.length > 0) {
               allModules.set("gleam", decoder.decode(preludeBytes));
-              if (this.debug) {
-                console.log(
-                  `✓ Read gleam.mjs (prelude) from ${preludePath} (${preludeBytes.length} bytes)`,
-                );
-              }
+              this.logger.debug(
+                `✓ Read gleam.mjs (prelude) from ${preludePath} (${preludeBytes.length} bytes)`,
+              );
               break;
             }
           } catch {
@@ -400,14 +339,14 @@ gleam_stdlib = ">= 0.40.0 and < 2.0.0"
           }
         }
 
-        if (!allModules.has("gleam") && this.debug) {
-          console.log("⚠ Could not find gleam.mjs (prelude) - will use stub");
+        if (!allModules.has("gleam")) {
+          this.logger.debug("⚠ Could not find gleam.mjs (prelude) - will use stub");
         }
 
         // Read compiled JavaScript for all written modules
         for (const modName of this.writtenModules) {
           try {
-            const modJs = read_compiled_javascript(this.projectId, modName);
+            const modJs = this.wasm.readCompiledJavaScript(this.projectId, modName);
             if (modJs) {
               allModules.set(modName, modJs);
             }
@@ -428,7 +367,7 @@ gleam_stdlib = ">= 0.40.0 and < 2.0.0"
       } catch (compileError) {
         // Collect warnings even if compilation fails
         let warning;
-        while ((warning = pop_warning(this.projectId)) !== undefined) {
+        while ((warning = this.wasm.popWarning(this.projectId)) !== undefined) {
           warnings.push(warning);
         }
 
@@ -484,18 +423,7 @@ gleam_stdlib = ">= 0.40.0 and < 2.0.0"
     allModules?: Map<string, string>,
     ffiFiles?: Map<string, string>,
   ): Promise<RunResult> {
-    const output: string[] = [];
-
-    try {
-      // Try real JavaScript execution first
-      return await this.realJavaScriptExecution(jsCode, moduleName, output, allModules, ffiFiles);
-    } catch (error) {
-      // Fallback to simulation if real execution fails
-      if (this.debug) {
-        console.warn("Real execution failed, falling back to simulation:", error);
-      }
-      return await this.simulateJavaScriptExecution(jsCode, moduleName, output);
-    }
+    return await this.realJavaScriptExecution(jsCode, moduleName, [], allModules, ffiFiles);
   }
 
   private async realJavaScriptExecution(
@@ -623,193 +551,14 @@ gleam_stdlib = ">= 0.40.0 and < 2.0.0"
     gleamIo: string;
     gleamString: string;
   } {
-    return {
-      gleam: `
-export class Empty {
-  constructor() {}
-}
-
-export class List {
-  constructor(head, tail) {
-    this.head = head;
-    this.tail = tail;
-  }
-
-  static fromArray(arr) {
-    if (arr.length === 0) return new Empty();
-    return new List(arr[0], List.fromArray(arr.slice(1)));
-  }
-
-  toArray() {
-    const result = [];
-    let current = this;
-    while (current instanceof List) {
-      result.push(current.head);
-      current = current.tail;
-    }
-    return result;
-  }
-}
-
-export const CustomType = class CustomType {};
-export const BitArray = class BitArray {};
-export const UtfCodepoint = class UtfCodepoint {};
-export function bitArraySlice() { return new BitArray(); }
-export function bitArraySliceToInt() { return 0; }
-`,
-      gleamIo: `
-export function println(msg) {
-  self.postMessage({ type: "output", line: String(msg) });
-}
-
-export function print(msg) {
-  self.postMessage({ type: "output", line: String(msg) });
-}
-
-export function debug(value) {
-  self.postMessage({ type: "output", line: String(value) });
-  return value;
-}
-`,
-      gleamString: `
-import { Empty, List } from '../gleam.mjs';
-
-export function split(str, delimiter) {
-  const parts = str.split(delimiter);
-  return List.fromArray(parts);
-}
-
-export function trim(str) {
-  return str.trim();
-}
-`,
-    };
-  }
-
-  private async simulateJavaScriptExecution(
-    jsCode: string,
-    moduleName: string,
-    output: string[],
-  ): Promise<RunResult> {
-    try {
-      await this.processEchoCalls(jsCode, moduleName, output);
-      this.processPrintlnCalls(jsCode, output);
-
-      this.logNoOutputWarning(output);
-
-      return {
-        success: true,
-        output,
-        errors: [],
-      };
-    } catch (error) {
-      return {
-        success: false,
-        output: [],
-        errors: [`Simulation error: ${error}`],
-      };
-    }
-  }
-
-  private async processEchoCalls(
-    jsCode: string,
-    moduleName: string,
-    output: string[],
-  ): Promise<void> {
-    if (!jsCode.includes("echo(")) return;
-
-    const echoMatches = jsCode.matchAll(ECHO_CALL_PATTERN);
-    for (const match of echoMatches) {
-      const value = match[1];
-      const line = match[3];
-
-      output.push(`src/${moduleName}.gleam:${line}`);
-
-      if (value.includes("resp.body")) {
-        await this.handleHttpResponseEcho(jsCode, output);
-      } else {
-        output.push(this.formatEchoValue(value));
-      }
-    }
-  }
-
-  private async handleHttpResponseEcho(jsCode: string, output: string[]): Promise<void> {
-    const url = this.extractUrlFromCode(jsCode);
-    const htmlContent = await this.simulateHttpFetch(url);
-    output.push(`"${htmlContent}"`);
-  }
-
-  private extractUrlFromCode(jsCode: string): string {
-    const urlMatch = jsCode.match(URL_EXTRACTION_PATTERN);
-    return urlMatch ? urlMatch[1] : FALLBACK_URL;
-  }
-
-  private processPrintlnCalls(jsCode: string, output: string[]): void {
-    if (!jsCode.includes("$io.println")) return;
-
-    const printMatches = jsCode.matchAll(PRINTLN_PATTERN);
-    for (const match of printMatches) {
-      const arg = match[1].trim();
-      if (arg.startsWith('"') && arg.endsWith('"')) {
-        output.push(arg.slice(1, -1));
-      }
-    }
-  }
-
-  private logNoOutputWarning(output: string[]): void {
-    if (output.length === 0 && this.logLevel !== "silent") {
-      console.info("No io.println or echo calls detected in the executed code");
-    }
-  }
-
-  private async simulateHttpFetch(url: string): Promise<string> {
-    try {
-      if (this.debug) {
-        console.log(`Fetching URL: ${url}`);
-      }
-
-      const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      const text = await response.text();
-      return this.escapeForJsonString(text);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      if (this.debug) {
-        console.warn(`Fetch failed for ${url}: ${errorMessage}`);
-      }
-      return `Fetch Error: ${errorMessage}`;
-    }
-  }
-
-  private escapeForJsonString(text: string): string {
-    return text
-      .replace(/\\/g, "\\\\")
-      .replace(/"/g, '\\"')
-      .replace(/\n/g, "\\n")
-      .replace(/\r/g, "\\r")
-      .replace(/\t/g, "\\t");
-  }
-
-  private formatEchoValue(value: string): string {
-    if (value.includes('"')) {
-      const stringMatch = value.match(/"([^"]+)"/);
-      if (stringMatch) {
-        return `"${stringMatch[1]}"`;
-      }
-    }
-    return `"${value}"`;
+    return this.moduleStubs;
   }
 
   private async loadLibraryModules(
     library: { name: string; baseUrl: string; modules: string[] },
     write_module: (projectId: number, moduleName: string, code: string) => void,
   ): Promise<void> {
-    if (this.debug) {
-      console.log(`Loading ${library.name} modules...`);
-    }
+    this.logger.debug(`Loading ${library.name} modules...`);
 
     // Load modules in parallel for better performance
     await Promise.all(
@@ -830,204 +579,58 @@ export function trim(str) {
         const code = await response.text();
         const moduleName = modulePath.replace(".gleam", "");
         write_module(this.projectId, moduleName, code);
-
-        if (this.debug) {
-          console.log(`✓ Loaded ${moduleName}`);
-        }
+        this.logger.debug(`✓ Loaded ${moduleName}`);
       } else {
         // Consume the response body to prevent resource leaks
         await response.body?.cancel();
-
-        if (this.debug) {
-          console.warn(`⚠ Failed to load ${modulePath}: ${response.status}`);
-        }
+        this.logger.warn(`⚠ Failed to load ${modulePath}: ${response.status}`);
       }
     } catch (error) {
-      if (this.debug) {
-        console.warn(`⚠ Error loading ${modulePath}:`, error);
-      }
+      this.logger.warn(`⚠ Error loading ${modulePath}:`, error);
     }
   }
 
   private async addStandardLibrary(): Promise<void> {
     // Skip if noStdlib is set
     if (this.noStdlib) {
-      if (this.debug) {
-        console.log("Skipping standard library loading (--no-stdlib)");
-      }
+      this.logger.debug("Skipping standard library loading (--no-stdlib)");
       return;
     }
 
-    // Import write_module function
-    const { write_module } = await import(`file://${this.wasmPath}/gleam_wasm.js`);
-
-    // Wrap write_module to track written modules
+    // Wrap wasm.writeModule to track written modules
     const trackingWriteModule = (projectId: number, moduleName: string, code: string) => {
-      write_module(projectId, moduleName, code);
+      this.wasm.writeModule(projectId, moduleName, code);
       this.writtenModules.add(moduleName);
     };
 
     // Create stdlib loader with config
     const stdlibLoader = createStdlibLoader(this.standardLibrary, this.debug);
 
-    try {
-      // Load all standard libraries using the new Hex.pm-based loader
-      const result = await stdlibLoader.loadAll(
-        this.standardLibrary,
-        this.projectId,
-        trackingWriteModule,
-      );
+    const result = await stdlibLoader.loadAll(this.projectId, trackingWriteModule);
 
-      // Collect FFI files from loaded packages
-      if (result.ffiFiles && result.ffiFiles.length > 0) {
-        for (const ffiFile of result.ffiFiles) {
-          this.ffiFiles.set(ffiFile.path, ffiFile.content);
-        }
-        if (this.debug) {
-          console.log(`✓ Collected ${result.ffiFiles.length} FFI files`);
-        }
+    // Collect FFI files from loaded packages
+    if (result.ffiFiles && result.ffiFiles.length > 0) {
+      for (const ffiFile of result.ffiFiles) {
+        this.ffiFiles.set(ffiFile.path, ffiFile.content);
       }
-
-      // Log any errors (but don't fail - fallback modules may still work)
-      if (result.errors.length > 0 && this.debug) {
-        for (const error of result.errors) {
-          console.warn(`⚠ ${error}`);
-        }
-      }
-
-      if (this.debug) {
-        console.log(`✓ Loaded ${result.modules.length} modules from standard library`);
-      }
-    } catch (error) {
-      if (this.debug) {
-        console.warn(`⚠ Standard library loading failed: ${error}`);
-        console.log("Attempting fallback loading...");
-      }
-
-      // Fallback to the old GitHub-based loading method
-      await this.addStandardLibraryFallback(trackingWriteModule);
+      this.logger.debug(`✓ Collected ${result.ffiFiles.length} FFI files`);
     }
 
-    // Add a fallback basic gleam/io implementation if stdlib version failed
-    try {
-      // Test if gleam/io was successfully loaded
-      const testCode = 'import gleam/io\npub fn check() { io.println("check") }';
-      trackingWriteModule(this.projectId, "test_io", testCode);
-    } catch {
-      // Fallback implementation
-      const gleamIo = `
-// Fallback gleam/io module implementation
-
-@external(javascript, "console", "log")
-pub fn print(value: a) -> Nil
-
-pub fn println(value: a) -> Nil {
-  print(value)
-}
-
-@external(javascript, "console", "debug")
-pub fn debug(value: a) -> a
-`;
-      trackingWriteModule(this.projectId, "gleam/io", gleamIo);
-
-      if (this.debug) {
-        console.log("✓ Using fallback gleam/io implementation");
-      }
+    // Log any errors (but don't fail - fallback modules may still work)
+    for (const error of result.errors) {
+      this.logger.warn(`⚠ ${error}`);
     }
-  }
 
-  /**
-   * Fallback method using GitHub raw URLs (for when Hex.pm is unavailable)
-   */
-  private async addStandardLibraryFallback(
-    write_module: (projectId: number, moduleName: string, code: string) => void,
-  ): Promise<void> {
-    // Define standard libraries to preload (old GitHub-based approach)
-    const standardLibraries = [
-      {
-        name: "gleam_stdlib",
-        baseUrl: "https://raw.githubusercontent.com/gleam-lang/stdlib/main/src",
-        modules: [
-          "gleam/io.gleam",
-          "gleam/list.gleam",
-          "gleam/string.gleam",
-          "gleam/string_tree.gleam",
-          "gleam/int.gleam",
-          "gleam/float.gleam",
-          "gleam/bool.gleam",
-          "gleam/result.gleam",
-          "gleam/option.gleam",
-          "gleam/order.gleam",
-          "gleam/bit_array.gleam",
-          "gleam/dict.gleam",
-          "gleam/set.gleam",
-          "gleam/uri.gleam",
-          "gleam/dynamic.gleam",
-          "gleam/dynamic/decode.gleam",
-          "gleam/function.gleam",
-        ],
-      },
-      {
-        name: "gleam_javascript",
-        baseUrl: "https://raw.githubusercontent.com/gleam-lang/javascript/main/src",
-        modules: [
-          "gleam/javascript/array.gleam",
-          "gleam/javascript/promise.gleam",
-        ],
-      },
-      {
-        name: "plinth",
-        baseUrl: "https://raw.githubusercontent.com/CrowdHailer/plinth/main/src",
-        modules: [
-          "plinth/browser/document.gleam",
-          "plinth/browser/element.gleam",
-          "plinth/browser/event.gleam",
-          "plinth/browser/window.gleam",
-          "plinth/javascript/global.gleam",
-          "plinth/javascript/date.gleam",
-          "plinth/javascript/console.gleam",
-          "plinth/javascript/json.gleam",
-          "plinth/javascript/storage.gleam",
-        ],
-      },
-      {
-        name: "gleam_http",
-        baseUrl: "https://raw.githubusercontent.com/gleam-lang/http/main/src",
-        modules: [
-          "gleam/http.gleam",
-          "gleam/http/request.gleam",
-          "gleam/http/response.gleam",
-          "gleam/http/service.gleam",
-          "gleam/http/cookie.gleam",
-        ],
-      },
-      {
-        name: "gleam_fetch",
-        baseUrl: "https://raw.githubusercontent.com/gleam-lang/fetch/main/src",
-        modules: [
-          "gleam/fetch.gleam",
-          "gleam/fetch/form_data.gleam",
-        ],
-      },
-      {
-        name: "gleam_json",
-        baseUrl: "https://raw.githubusercontent.com/gleam-lang/json/main/src",
-        modules: [
-          "gleam/json.gleam",
-        ],
-      },
-    ];
+    this.logger.debug(`✓ Loaded ${result.modules.length} modules from standard library`);
 
-    // Load all standard libraries in parallel for better performance
-    await Promise.all(
-      standardLibraries.map((library) => this.loadLibraryModules(library, write_module)),
-    );
+    // Add fallback gleam/io if stdlib loading failed to load it
+    if (!result.modules.some((m) => m.moduleName === "gleam/io")) {
+      stdlibLoader.addFallbackIo(this.projectId, trackingWriteModule);
+    }
   }
 
   private async addPreloadScripts(): Promise<void> {
     if (this.preloadScripts.length === 0) return;
-
-    const { write_module } = await import(`file://${this.wasmPath}/gleam_wasm.js`);
 
     for (const script of this.preloadScripts) {
       let code = script.code;
@@ -1043,9 +646,7 @@ pub fn debug(value: a) -> a
           }
           code = await response.text();
         } catch (error) {
-          if (this.debug) {
-            console.warn(`Failed to load preload script from ${script.url}:`, error);
-          }
+          this.logger.warn(`Failed to load preload script from ${script.url}:`, error);
           continue;
         }
       }
@@ -1055,20 +656,17 @@ pub fn debug(value: a) -> a
         try {
           code = await Deno.readTextFile(script.filePath);
         } catch (error) {
-          if (this.debug) {
-            console.warn(`Failed to load preload script from ${script.filePath}:`, error);
-          }
+          this.logger.warn(`Failed to load preload script from ${script.filePath}:`, error);
           continue;
         }
       }
 
       // Write the module and track it
-      write_module(this.projectId, script.moduleName, code);
+      if (code === undefined) continue;
+      this.wasm.writeModule(this.projectId, script.moduleName, code);
       this.writtenModules.add(script.moduleName);
 
-      if (this.debug) {
-        console.log(`Preloaded module: ${script.moduleName}`);
-      }
+      this.logger.debug(`Preloaded module: ${script.moduleName}`);
     }
   }
 }

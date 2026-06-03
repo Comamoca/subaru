@@ -281,19 +281,23 @@ async function main(): Promise<void> {
     Deno.exit(1);
   }
 
+  // Separate compile-only flag (not part of SubaruConfigFile)
+  const compileOnly = args.compile;
+
   // Merge CLI args with config file (CLI args take precedence)
-  const config = {
+  const config: SubaruConfigFile = {
     ...fileConfig,
     wasmPath: args["wasm-path"] || fileConfig.wasmPath,
     debug: args.debug !== undefined ? args.debug : fileConfig.debug,
-    logLevel: args["log-level"] || fileConfig.logLevel || "silent",
-    compile: args.compile,
+    logLevel:
+      (args["log-level"] || fileConfig.logLevel || "silent") as SubaruConfigFile["logLevel"],
     noWarnings: args["show-warnings"]
       ? false
       : (args["no-warnings"]
         ? true
         : (fileConfig.noWarnings !== undefined ? fileConfig.noWarnings : true)),
-    warningColor: args["warning-color"] || fileConfig.warningColor || "yellow",
+    warningColor: (args["warning-color"] || fileConfig.warningColor ||
+      "yellow") as SubaruConfigFile["warningColor"],
     noStdlib: args["no-stdlib"] !== undefined ? args["no-stdlib"] : fileConfig.noStdlib,
     standardLibrary: fileConfig.standardLibrary,
   };
@@ -302,11 +306,11 @@ async function main(): Promise<void> {
   const positionalArgs = args._ as string[];
 
   if (args.file) {
-    await runFromFile(args.file, config);
+    await runFromFile(args.file, { ...config, compile: compileOnly });
   } else if (args.code) {
-    await runCode(args.code, config);
+    await runCode(args.code, { ...config, compile: compileOnly });
   } else if (args.url) {
-    await runFromUrl(args.url, config);
+    await runFromUrl(args.url, { ...config, compile: compileOnly });
   } else if (positionalArgs.length > 0) {
     // Handle positional file argument
     const filePath = positionalArgs[0];

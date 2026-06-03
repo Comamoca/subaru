@@ -52,11 +52,13 @@ export class StdlibLoader {
   private hexClient: HexClient;
   private cache: PackageCache;
   private debug: boolean;
+  private config: StandardLibraryConfig;
   private loadedPackages: Set<string> = new Set();
 
   constructor(config: StandardLibraryConfig = {}, debug: boolean = false) {
     this.hexClient = new HexClient();
     this.cache = new PackageCache(config.cache);
+    this.config = config;
     this.debug = debug;
   }
 
@@ -142,7 +144,6 @@ export class StdlibLoader {
    * Load all standard libraries (builtin + third-party)
    */
   async loadAll(
-    config: StandardLibraryConfig,
     projectId: number,
     writeModule: WriteModuleFn,
   ): Promise<LoadResult> {
@@ -170,9 +171,9 @@ export class StdlibLoader {
     result.errors.push(...builtinResult.errors);
 
     // Load third-party packages if specified
-    if (config.packages && config.packages.length > 0) {
+    if (this.config.packages && this.config.packages.length > 0) {
       const thirdPartyResult = await this.loadThirdPartyPackages(
-        config.packages,
+        this.config.packages,
         projectId,
         writeModule,
       );

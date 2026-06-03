@@ -4,6 +4,7 @@
 erl_crash.dump
 .devenv
 .direnv
+/.agent-shell/
 
 # agentplane: ignore runtime/transient workspace artifacts
 .env

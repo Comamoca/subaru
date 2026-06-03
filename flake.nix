@@ -125,7 +125,7 @@
               };
 	      deno = {
 		enable = true;
-		package = pkgs.deno."2.3.1";
+                package = pkgs.deno."2.8.1";
 	      };
             };
 

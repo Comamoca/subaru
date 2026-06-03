@@ -19,6 +19,8 @@ export interface SubaruConfigFile extends SubaruConfig {
   workerPermissions?: WorkerPermissions;
   // Execution timeout in milliseconds
   timeout?: number;
+  // Compile-only mode (CLI flag)
+  compile?: boolean;
 }
 
 export async function loadConfig(configPath?: string): Promise<SubaruConfig> {
@@ -41,7 +43,11 @@ export async function loadConfig(configPath?: string): Promise<SubaruConfig> {
       // Config file not found or invalid, continue to next path
       if (configPath) {
         // If user specified a config path and it failed, throw error
-        throw new Error(`Failed to load config from ${configPath}: ${error.message}`);
+        throw new Error(
+          `Failed to load config from ${configPath}: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
       }
     }
   }
