@@ -525,7 +525,7 @@ gleam_stdlib = ">= 0.40.0 and < 2.0.0"
       });
 
       // Set up timeout with cleanup
-      let timeoutId: number;
+      let timeoutId: ReturnType<typeof setTimeout>;
       const timeoutPromise = new Promise<RunResult>((_, reject) => {
         timeoutId = setTimeout(() => {
           worker.terminate();
