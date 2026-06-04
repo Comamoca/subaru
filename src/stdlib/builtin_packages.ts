@@ -161,3 +161,30 @@ export const BUILTIN_PACKAGE_MODULES: Record<BuiltinPackageName, string[]> = {
     "simplifile.gleam",
   ],
 };
+
+
+/**
+ * Preset definitions
+ *
+ * Controls which builtin packages are loaded based on the preset level.
+ */
+export type Preset = "none" | "minimal" | "standard" | "full";
+
+export const PRESET_PACKAGES: Record<Preset, readonly string[]> = {
+  none: [],
+  minimal: ["gleam_stdlib"],
+  standard: ["gleam_stdlib", "gleam_javascript", "gleam_json"],
+  full: [...BUILTIN_PACKAGE_NAMES],
+};
+
+/**
+ * Get the list of builtin package names for a given preset
+ */
+export function getPresetPackages(preset: Preset): string[] {
+  return [...PRESET_PACKAGES[preset]];
+}
+
+/**
+ * Default preset applied when no preset is specified
+ */
+export const DEFAULT_PRESET: Preset = "full";

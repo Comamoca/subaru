@@ -15,17 +15,26 @@ import {
   BUILTIN_PACKAGE_MODULES,
   BUILTIN_PACKAGE_NAMES,
   type BuiltinPackageName,
+  DEFAULT_PRESET,
   FALLBACK_GITHUB_URLS,
+  getPresetPackages,
+  type Preset,
 } from "./builtin_packages.ts";
 
-export interface ThirdPartyPackage {
+export interface PackageConfig {
   name: string;
   version?: string; // If omitted, uses latest version
+  include?: string[]; // Load only specific modules (by module path, e.g., "gleam/io")
+  exclude?: string[]; // Exclude specific modules (by module path)
 }
 
+// Backward compatibility alias
+export type ThirdPartyPackage = PackageConfig;
+
 export interface StandardLibraryConfig {
+  preset?: Preset;
   // User-specified third-party packages
-  packages?: (string | ThirdPartyPackage)[];
+  packages?: (string | PackageConfig)[];
   cache?: PackageCacheConfig;
 }
 
@@ -48,6 +57,19 @@ export interface LoadResult {
 
 type WriteModuleFn = (projectId: number, moduleName: string, code: string) => void;
 
+/**
+ * Check if a module path matches a filter entry
+ * Matches against both tarball path (src/gleam/io.gleam) and module name (gleam/io)
+ */
+function moduleMatchesFilter(modulePath: string, filterEntry: string): boolean {
+  const moduleName = modulePath.replace(/^src\//, "").replace(/\.gleam$/, "");
+  return modulePath === filterEntry ||
+    modulePath.endsWith("/" + filterEntry) ||
+    modulePath.endsWith("/" + filterEntry + ".gleam") ||
+    moduleName === filterEntry ||
+    moduleName.startsWith(filterEntry + "/");
+}
+
 export class StdlibLoader {
   private hexClient: HexClient;
   private cache: PackageCache;
@@ -63,15 +85,20 @@ export class StdlibLoader {
   }
 
   /**
-   * Load all builtin packages
+   * Load builtin packages based on preset
    */
   async loadBuiltinPackages(
     projectId: number,
     writeModule: WriteModuleFn,
+    preset?: Preset,
   ): Promise<LoadResult> {
     const result: LoadResult = { modules: [], ffiFiles: [], errors: [] };
 
-    for (const packageName of BUILTIN_PACKAGE_NAMES) {
+    const packagesToLoad = preset
+      ? getPresetPackages(preset)
+      : [...BUILTIN_PACKAGE_NAMES];
+
+    for (const packageName of packagesToLoad) {
       try {
         const packageResult = await this.loadPackage(
           packageName,
@@ -108,7 +135,7 @@ export class StdlibLoader {
    * Load third-party packages specified in config
    */
   async loadThirdPartyPackages(
-    packages: (string | ThirdPartyPackage)[],
+    packages: (string | PackageConfig)[],
     projectId: number,
     writeModule: WriteModuleFn,
   ): Promise<LoadResult> {
@@ -117,6 +144,7 @@ export class StdlibLoader {
     for (const pkg of packages) {
       const packageName = typeof pkg === "string" ? pkg : pkg.name;
       const version = typeof pkg === "string" ? undefined : pkg.version;
+      const filters = typeof pkg === "string" ? undefined : { include: pkg.include, exclude: pkg.exclude };
 
       // Skip if already loaded as a builtin
       if (this.loadedPackages.has(packageName)) {
@@ -127,7 +155,7 @@ export class StdlibLoader {
       }
 
       try {
-        const packageResult = await this.loadPackage(packageName, version, projectId, writeModule);
+        const packageResult = await this.loadPackage(packageName, version, projectId, writeModule, filters);
         result.modules.push(...packageResult.modules);
         result.ffiFiles.push(...packageResult.ffiFiles);
         result.errors.push(...packageResult.errors);
@@ -164,8 +192,13 @@ export class StdlibLoader {
       }
     }
 
-    // Load builtin packages first
-    const builtinResult = await this.loadBuiltinPackages(projectId, writeModule);
+    // Resolve preset from config
+    const preset = config.preset ?? DEFAULT_PRESET;
+
+    // Load builtin packages based on preset
+    const builtinResult = preset === "none"
+      ? { modules: [], ffiFiles: [], errors: [] }
+      : await this.loadBuiltinPackages(projectId, writeModule, preset);
     result.modules.push(...builtinResult.modules);
     result.ffiFiles.push(...builtinResult.ffiFiles);
     result.errors.push(...builtinResult.errors);
@@ -215,6 +248,7 @@ export class StdlibLoader {
     version: string | undefined,
     projectId: number,
     writeModule: WriteModuleFn,
+    filters?: { include?: string[]; exclude?: string[] },
   ): Promise<LoadResult> {
     const result: LoadResult = { modules: [], ffiFiles: [], errors: [] };
 
@@ -243,6 +277,23 @@ export class StdlibLoader {
           writeModule(projectId, moduleName, code);
           result.modules.push({ moduleName, code, packageName });
         }
+      }
+
+      // Apply include/exclude filters on cached files
+      const cachedFiltered: typeof result = { modules: [], ffiFiles: [], errors: [] };
+      if (filters) {
+        for (const item of result.modules) {
+          if (filters.include && !filters.include.some((f) => moduleMatchesFilter(item.moduleName, f))) continue;
+          if (filters.exclude && filters.exclude.some((f) => moduleMatchesFilter(item.moduleName, f))) continue;
+          cachedFiltered.modules.push(item);
+        }
+        for (const item of result.ffiFiles) {
+          if (filters.include && !filters.include.some((f) => moduleMatchesFilter(item.path, f))) continue;
+          if (filters.exclude && filters.exclude.some((f) => moduleMatchesFilter(item.path, f))) continue;
+          cachedFiltered.ffiFiles.push(item);
+        }
+        result.modules = cachedFiltered.modules;
+        result.ffiFiles = cachedFiltered.ffiFiles;
       }
 
       this.loadedPackages.add(packageName);
@@ -280,11 +331,27 @@ export class StdlibLoader {
       }
     }
 
+    // Apply include/exclude filters on extracted files
+    if (filters) {
+      const filteredModules = result.modules.filter((mod) => {
+        if (filters.include && !filters.include.some((f) => moduleMatchesFilter(mod.moduleName, f))) return false;
+        if (filters.exclude && filters.exclude.some((f) => moduleMatchesFilter(mod.moduleName, f))) return false;
+        return true;
+      });
+      const filteredFFIs = result.ffiFiles.filter((ffi) => {
+        if (filters.include && !filters.include.some((f) => moduleMatchesFilter(ffi.path, f))) return false;
+        if (filters.exclude && filters.exclude.some((f) => moduleMatchesFilter(ffi.path, f))) return false;
+        return true;
+      });
+      result.modules = filteredModules;
+      result.ffiFiles = filteredFFIs;
+    }
+
     this.loadedPackages.add(packageName);
 
     if (this.debug) {
       console.log(
-        `✓ Loaded ${moduleCount} modules and ${ffiCount} FFI files from ${packageName}`,
+        `✓ Loaded ${result.modules.length} modules and ${result.ffiFiles.length} FFI files from ${packageName}`,
       );
     }
 
