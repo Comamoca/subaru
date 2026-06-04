@@ -554,42 +554,6 @@ gleam_stdlib = ">= 0.40.0 and < 2.0.0"
     return this.moduleStubs;
   }
 
-  private async loadLibraryModules(
-    library: { name: string; baseUrl: string; modules: string[] },
-    write_module: (projectId: number, moduleName: string, code: string) => void,
-  ): Promise<void> {
-    this.logger.debug(`Loading ${library.name} modules...`);
-
-    // Load modules in parallel for better performance
-    await Promise.all(
-      library.modules.map((modulePath) => this.loadSingleModule(library, modulePath, write_module)),
-    );
-  }
-
-  private async loadSingleModule(
-    library: { name: string; baseUrl: string },
-    modulePath: string,
-    write_module: (projectId: number, moduleName: string, code: string) => void,
-  ): Promise<void> {
-    try {
-      const moduleUrl = `${library.baseUrl}/${modulePath}`;
-      const response = await fetch(moduleUrl);
-
-      if (response.ok) {
-        const code = await response.text();
-        const moduleName = modulePath.replace(".gleam", "");
-        write_module(this.projectId, moduleName, code);
-        this.logger.debug(`✓ Loaded ${moduleName}`);
-      } else {
-        // Consume the response body to prevent resource leaks
-        await response.body?.cancel();
-        this.logger.warn(`⚠ Failed to load ${modulePath}: ${response.status}`);
-      }
-    } catch (error) {
-      this.logger.warn(`⚠ Error loading ${modulePath}:`, error);
-    }
-  }
-
   private async addStandardLibrary(): Promise<void> {
     // Skip if noStdlib is set
     if (this.noStdlib) {
