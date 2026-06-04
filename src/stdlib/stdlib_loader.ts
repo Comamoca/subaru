@@ -193,7 +193,7 @@ export class StdlibLoader {
     }
 
     // Resolve preset from config
-    const preset = config.preset ?? DEFAULT_PRESET;
+    const preset = this.config.preset ?? DEFAULT_PRESET;
 
     // Load builtin packages based on preset
     const builtinResult = preset === "none"
