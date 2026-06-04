@@ -158,6 +158,99 @@ pub fn main() {
 }
 ```
 
+## 📦 Package Management
+
+Subaru automatically loads Gleam packages from [Hex.pm](https://hex.pm) when executing code. Builtin packages are loaded by default, and you can add third-party packages or customize which packages are loaded.
+
+### Preset System
+
+The `preset` option controls which builtin packages are automatically loaded:
+
+| Preset | Loaded Packages | Description |
+|--------|----------------|-------------|
+| `none` | None | No builtin packages (equivalent to `--no-stdlib`) |
+| `minimal` | gleam_stdlib | Core types and functions only |
+| `standard` | gleam_stdlib, gleam_javascript, gleam_json | Core + JavaScript interop + JSON |
+| `full` | All 8 packages | Full standard library (default) |
+
+The 8 builtin packages are: `gleam_stdlib`, `gleam_javascript`, `gleam_json`, `gleam_http`, `gleam_fetch`, `plinth`, `filepath`, `simplifile`.
+
+### Configuration Example
+
+Create a `subaru.config.json` file:
+
+```json
+{
+  "standardLibrary": {
+    "preset": "full",
+    "packages": [
+      "lustre",
+      { "name": "gleam_otp", "version": "0.10.0" }
+    ],
+    "cache": {
+      "enabled": true,
+      "ttl": 604800
+    }
+  }
+}
+```
+
+### Version Pinning
+
+Pin package versions for reproducible builds:
+
+```json
+{
+  "standardLibrary": {
+    "packages": [
+      { "name": "gleam_json", "version": "2.0.0" }
+    ]
+  }
+}
+```
+
+### Selective Module Loading
+
+Use `include` and `exclude` to load only specific modules from a package:
+
+```json
+{
+  "standardLibrary": {
+    "packages": [
+      {
+        "name": "gleam_http",
+        "include": ["gleam/http", "gleam/http/request"]
+      }
+    ]
+  }
+}
+```
+
+### Cache Management
+
+Packages are cached locally at `~/.cache/subaru/packages/` (7-day TTL by default).
+
+```sh
+# Clear package cache only
+subaru --clean-package-cache
+
+# Clear entire Subaru cache (WASM compiler + packages)
+subaru --clean-cache
+```
+
+### CLI Flags
+
+- `--no-stdlib` — Disable all builtin package loading
+- `--clean-package-cache` — Remove Hex.pm package cache only
+- `--clean-cache` — Remove all cache directories
+
+### Generate Example Config
+
+```sh
+subaru --init-config
+```
+
+
 ## 📝 Todo
 
 - [ ] Add more comprehensive error handling

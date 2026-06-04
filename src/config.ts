@@ -121,12 +121,23 @@ pub fn add(a: Int, b: Int) -> Int {
         filePath: "./libs/my_local_lib.gleam",
       },
     ],
-    // Standard library configuration
+    // Standard library configuration (Hex.pm-based)
     standardLibrary: {
-      // Additional third-party packages to load (beyond the 8 builtin packages)
+      // Preset controls which builtin packages are loaded automatically
+      // "none" - no builtin packages
+      // "minimal" - gleam_stdlib only
+      // "standard" - gleam_stdlib, gleam_javascript, gleam_json
+      // "full" - all 8 builtin packages (default)
+      preset: "full",
+      // Additional third-party packages to load (beyond the builtin preset packages)
       packages: [
         // "lustre",  // Just package name (uses latest version)
         // { name: "gleam_otp", version: "0.10.0" },  // Specific version
+        // {
+        //   name: "some_package",
+        //   include: ["some/module"],  // Load only specific modules
+        //   exclude: ["some/module/internal"],  // Exclude specific modules
+        // },
       ],
       cache: {
         enabled: true,
