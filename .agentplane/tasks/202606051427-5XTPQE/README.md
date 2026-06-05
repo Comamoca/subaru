@@ -4,7 +4,7 @@ title: "Fix runtime module resolution bugs"
 status: "DOING"
 priority: "high"
 owner: "ORCHESTRATOR"
-revision: 4
+revision: 6
 origin:
   system: "manual"
 depends_on: []
@@ -17,11 +17,27 @@ plan_approval:
   updated_by: "ORCHESTRATOR"
   note: null
 verification:
-  state: "pending"
-  updated_at: null
-  updated_by: null
-  note: null
+  state: "ok"
+  updated_at: "2026-06-05T14:38:41.590Z"
+  updated_by: "ORCHESTRATOR"
+  note: "All 29 tests pass. Examples: simple_usage (Hello+Math), debug_usage (remote), preload_example all succeed. CLI inline and file execution produce expected output."
   attempts: 0
+quality_review:
+  state: "pass"
+  updated_at: "2026-06-05T14:39:00.825Z"
+  updated_by: "EVALUATOR"
+  note: "All fixes verified: 29 tests pass, all examples execute successfully, CLI codepaths work"
+  evaluated_sha: "c2601a1d22ebe1a716e4dbd25f4b261d3fdf1ca3"
+  blueprint_digest: "316f7ae989c85b5cb89d25553a4bfb5ab11f5c1b5a0263f684caa6124f98db25"
+  evidence_refs:
+    - ".agentplane/tasks/202606051427-5XTPQE/README.md"
+    - ".agentplane/tasks/202606051427-5XTPQE/quality/20260605-143900825-recovery-context/quality-report.json"
+    - ".agentplane/tasks/202606051427-5XTPQE/quality/20260605-143900825-recovery-context/evaluator-prompt.md"
+    - ".agentplane/tasks/202606051427-5XTPQE/quality/20260605-143900825-recovery-context/evaluator-opinion.md"
+    - ".agentplane/tasks/202606051427-5XTPQE/blueprint/resolved-snapshot.json"
+    - "deno task test (29/29 pass), deno task example (Hello+Math), deno task example:preload (Hello World! + 5+3=8), deno task example:debug (remote script works), deno task cli --code (Hello from WASM!), deno task cli example.gleam (Hello from file!)"
+  findings:
+    - "gleam_stdlib.mjs FFI naming convention mismatch fixed via regex normalization at load time"
 commit: null
 comments:
   -
@@ -35,8 +51,14 @@ events:
     from: "TODO"
     to: "DOING"
     note: "Start: Implement all fixes for runtime module resolution bugs in parallel waves"
+  -
+    type: "verify"
+    at: "2026-06-05T14:38:41.590Z"
+    author: "ORCHESTRATOR"
+    state: "ok"
+    note: "All 29 tests pass. Examples: simple_usage (Hello+Math), debug_usage (remote), preload_example all succeed. CLI inline and file execution produce expected output."
 doc_version: 3
-doc_updated_at: "2026-06-05T14:27:27.624Z"
+doc_updated_at: "2026-06-05T14:38:41.656Z"
 doc_updated_by: "ORCHESTRATOR"
 description: "Fix FFI files not written to WASM VFS, worker stub overwrite, preload example, and debug_usage URL"
 sections:
@@ -56,11 +78,33 @@ sections:
     3. Compare the final result against ## Scope and record any residual follow-up in ## Findings. Expected: open edges are explicit rather than implicit.
   Verification: |-
     <!-- BEGIN VERIFICATION RESULTS -->
+    ### 2026-06-05T14:38:41.590Z — VERIFY — ok
+
+    By: ORCHESTRATOR
+
+    Note: All 29 tests pass. Examples: simple_usage (Hello+Math), debug_usage (remote), preload_example all succeed. CLI inline and file execution produce expected output.
+    Attempts: 0
+
+    VerifyStepsRef: doc_version=3, doc_updated_at=2026-06-05T14:27:27.624Z, excerpt_hash=sha256:5c12d410b64ca8e94c3b6dd6e04a9646b5e7f26139dbc747620740c9ed8dea61
+
+    Details:
+
+    BlueprintSnapshotRef:
+    - state: current
+    - path: /home/coma/.ghq/github.com/Comamoca/subaru-fix-runtime/.agentplane/tasks/202606051427-5XTPQE/blueprint/resolved-snapshot.json
+    - old_digest: 316f7ae989c85b5cb89d25553a4bfb5ab11f5c1b5a0263f684caa6124f98db25
+    - current_digest: 316f7ae989c85b5cb89d25553a4bfb5ab11f5c1b5a0263f684caa6124f98db25
+    - route_changed: no
+    - safe_command: agentplane blueprint snapshot 202606051427-5XTPQE
+
     <!-- END VERIFICATION RESULTS -->
   Rollback Plan: |-
     - Revert task-related commit(s).
     - Re-run required checks to confirm rollback safety.
-  Findings: ""
+  Findings: |-
+    - Observation: gleam_stdlib.mjs FFI naming convention patched at load time; worker uses compiled modules when available; fallback stubs enhanced
+      Impact: Core runtime execution bug fixed - io.println now works in all codepaths
+      Resolution: FFI file DecodeError normalized to DecodeError to match compiler v1.11 output
 id_source: "generated"
 ---
 ## Summary
@@ -89,6 +133,25 @@ PLANNER fallback scaffold for "Fix runtime module resolution bugs". Replace with
 ## Verification
 
 <!-- BEGIN VERIFICATION RESULTS -->
+### 2026-06-05T14:38:41.590Z — VERIFY — ok
+
+By: ORCHESTRATOR
+
+Note: All 29 tests pass. Examples: simple_usage (Hello+Math), debug_usage (remote), preload_example all succeed. CLI inline and file execution produce expected output.
+Attempts: 0
+
+VerifyStepsRef: doc_version=3, doc_updated_at=2026-06-05T14:27:27.624Z, excerpt_hash=sha256:5c12d410b64ca8e94c3b6dd6e04a9646b5e7f26139dbc747620740c9ed8dea61
+
+Details:
+
+BlueprintSnapshotRef:
+- state: current
+- path: /home/coma/.ghq/github.com/Comamoca/subaru-fix-runtime/.agentplane/tasks/202606051427-5XTPQE/blueprint/resolved-snapshot.json
+- old_digest: 316f7ae989c85b5cb89d25553a4bfb5ab11f5c1b5a0263f684caa6124f98db25
+- current_digest: 316f7ae989c85b5cb89d25553a4bfb5ab11f5c1b5a0263f684caa6124f98db25
+- route_changed: no
+- safe_command: agentplane blueprint snapshot 202606051427-5XTPQE
+
 <!-- END VERIFICATION RESULTS -->
 
 ## Rollback Plan
@@ -97,3 +160,7 @@ PLANNER fallback scaffold for "Fix runtime module resolution bugs". Replace with
 - Re-run required checks to confirm rollback safety.
 
 ## Findings
+
+- Observation: gleam_stdlib.mjs FFI naming convention patched at load time; worker uses compiled modules when available; fallback stubs enhanced
+  Impact: Core runtime execution bug fixed - io.println now works in all codepaths
+  Resolution: FFI file DecodeError normalized to DecodeError to match compiler v1.11 output
