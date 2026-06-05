@@ -1,6 +1,6 @@
 #!/usr/bin/env -S deno run --allow-read --allow-write --allow-net --allow-run
 
-import Subaru from "../src/subaru_runner.ts";
+import Subaru from "../../src/subaru_runner.ts";
 
 // Example main code that uses preloaded modules
 const mainCode = `
@@ -36,8 +36,29 @@ pub fn add(a: Int, b: Int) -> Int {
   a + b
 }
 
-@external(javascript, "globalThis", "String")
-pub fn int_to_string(value: Int) -> String
+pub fn int_to_string(value: Int) -> String {
+  case value {
+    0 -> "0"
+    1 -> "1"
+    2 -> "2"
+    3 -> "3"
+    4 -> "4"
+    5 -> "5"
+    6 -> "6"
+    7 -> "7"
+    8 -> "8"
+    9 -> "9"
+    10 -> "10"
+    _ -> {
+      let abs =
+        case value < 0 {
+          True -> -value
+          False -> value
+        }
+      int_to_string(abs / 10) <> int_to_string(abs % 10)
+    }
+  }
+}
 `,
       },
     ],

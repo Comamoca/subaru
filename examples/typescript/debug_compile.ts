@@ -1,6 +1,6 @@
 #!/usr/bin/env -S deno run --allow-read --allow-write --allow-net --allow-run
 
-import Subaru from "../src/subaru_runner.ts";
+import Subaru from "../../src/subaru_runner.ts";
 
 const simpleCode = `
 import gleam/io
