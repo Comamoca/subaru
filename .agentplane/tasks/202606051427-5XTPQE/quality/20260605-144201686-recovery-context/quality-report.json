@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "task_id": "202606051427-5XTPQE",
+  "evaluator_id": "recovery-context",
+  "evaluator_profile": "EVALUATOR",
+  "generated_at": "2026-06-05T14:42:01.686Z",
+  "verdict": "pass",
+  "summary": "All fixes verified",
+  "evaluated_sha": "c2601a1d22ebe1a716e4dbd25f4b261d3fdf1ca3",
+  "blueprint_digest": "316f7ae989c85b5cb89d25553a4bfb5ab11f5c1b5a0263f684caa6124f98db25",
+  "findings": [
+    "All fixed and tested"
+  ],
+  "evidence_refs": [
+    ".agentplane/tasks/202606051427-5XTPQE/README.md",
+    "29/29 tests pass, all examples succeed"
+  ],
+  "missing_tests": [],
+  "hidden_assumptions": [],
+  "residual_risks": []
+}
