@@ -580,6 +580,19 @@ gleam_stdlib = ">= 0.40.0 and < 2.0.0"
       this.logger.debug(`✓ Collected ${result.ffiFiles.length} FFI files`);
     }
 
+    // Write FFI files to the WASM virtual filesystem so the compiler can
+    // find and copy them during the copying_native_source_files step
+    if (result.ffiFiles && result.ffiFiles.length > 0) {
+      for (const ffiFile of result.ffiFiles) {
+        try {
+          this.wasm.writeFile(this.projectId, `src/${ffiFile.path}`, ffiFile.content);
+          this.logger.debug(`✓ Wrote FFI file to VFS: src/${ffiFile.path}`);
+        } catch (error) {
+          this.logger.warn(`⚠ Failed to write FFI file src/${ffiFile.path}: ${error}`);
+        }
+      }
+    }
+
     // Log any errors (but don't fail - fallback modules may still work)
     for (const error of result.errors) {
       this.logger.warn(`⚠ ${error}`);
