@@ -50,11 +50,15 @@ async function executeModule(
     // Create directory structure
     await Deno.mkdir(`${tempDir}/gleam`, { recursive: true });
 
-    // Write gleam.mjs stub (base Gleam runtime types)
-    await Deno.writeTextFile(`${tempDir}/gleam.mjs`, moduleStubs.gleam);
+    // Write gleam.mjs stub (base Gleam runtime types) - only if not in compiledModules
+    if (!compiledModules || !("gleam" in compiledModules)) {
+      await Deno.writeTextFile(`${tempDir}/gleam.mjs`, moduleStubs.gleam);
+    }
 
-    // Write gleam_stdlib.mjs using the postMessage-based IO stub from runner
-    await Deno.writeTextFile(`${tempDir}/gleam_stdlib.mjs`, moduleStubs.gleamIo);
+    // Write gleam_stdlib.mjs - only if not already provided by compiled modules
+    if (!compiledModules || !("gleam_stdlib" in compiledModules)) {
+      await Deno.writeTextFile(`${tempDir}/gleam_stdlib.mjs`, moduleStubs.gleamIo);
+    }
 
     // Write all compiled modules from the compilation FIRST
     // These are the actual compiled JavaScript from Gleam
