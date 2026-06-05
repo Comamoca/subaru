@@ -65,7 +65,17 @@ async function executeModule(
       }
     }
 
-    // Write FFI files (JavaScript files that come with packages like simplifile)
+    // Write stubs for modules the compiler didn't produce
+    if (!compiledModules || !("gleam" in compiledModules)) {
+      await Deno.writeTextFile(`${tempDir}/gleam.mjs`, moduleStubs.gleam);
+    }
+    if (!compiledModules || !("gleam_stdlib" in compiledModules)) {
+      await Deno.writeTextFile(`${tempDir}/gleam_stdlib.mjs`, moduleStubs.gleamIo);
+    }
+
+    // Write FFI files LAST so they take precedence over stubs.
+    // FFI files contain ALL function implementations compiled modules need.
+    // Console output is captured via the console override below.
     if (ffiFiles) {
       for (const [ffiPath, ffiContent] of Object.entries(ffiFiles)) {
         const fullPath = `${tempDir}/${ffiPath}`;
@@ -77,15 +87,16 @@ async function executeModule(
       }
     }
 
-    // Write stubs LAST so they take precedence over FFI files for gleam_stdlib.mjs.
-    // The stubs use postMessage for output capture; the real FFI uses console.log
-    // which does not get captured by the worker's message handler.
-    if (!compiledModules || !("gleam" in compiledModules)) {
-      await Deno.writeTextFile(`${tempDir}/gleam.mjs`, moduleStubs.gleam);
-    }
-    if (!compiledModules || !("gleam_stdlib" in compiledModules)) {
-      await Deno.writeTextFile(`${tempDir}/gleam_stdlib.mjs`, moduleStubs.gleamIo);
-    }
+    // Override console.log/error to use postMessage for output capture
+    // This ensures FFI files that use console.log also get captured
+    const originalLog = console.log;
+    const originalError = console.error;
+    console.log = (...args: unknown[]) => {
+      self.postMessage({ type: "output", line: args.map(String).join(" ") });
+    };
+    console.error = (...args: unknown[]) => {
+      self.postMessage({ type: "output", line: args.map(String).join(" ") });
+    };
 
     // Write the main module
     const tempFile = `${tempDir}/${moduleName}.mjs`;
