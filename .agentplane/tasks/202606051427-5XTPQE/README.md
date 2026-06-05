@@ -4,7 +4,7 @@ title: "Fix runtime module resolution bugs"
 status: "DOING"
 priority: "high"
 owner: "ORCHESTRATOR"
-revision: 12
+revision: 13
 origin:
   system: "manual"
 depends_on: []
@@ -24,16 +24,16 @@ verification:
   attempts: 0
 quality_review:
   state: "pass"
-  updated_at: "2026-06-05T14:43:02.189Z"
+  updated_at: "2026-06-05T14:43:28.868Z"
   updated_by: "EVALUATOR"
   note: "All verified"
-  evaluated_sha: "2bb90c0072ff169ccea50833981f771952e9e1afd22ebe1a716e4dbd25f4b261d3fdf1ca3"
+  evaluated_sha: "506235c4123d6923f82f3e10f0b9c0133b889820"
   blueprint_digest: "316f7ae989c85b5cb89d25553a4bfb5ab11f5c1b5a0263f684caa6124f98db25"
   evidence_refs:
     - ".agentplane/tasks/202606051427-5XTPQE/README.md"
-    - ".agentplane/tasks/202606051427-5XTPQE/quality/20260605-144302189-recovery-context/quality-report.json"
-    - ".agentplane/tasks/202606051427-5XTPQE/quality/20260605-144302189-recovery-context/evaluator-prompt.md"
-    - ".agentplane/tasks/202606051427-5XTPQE/quality/20260605-144302189-recovery-context/evaluator-opinion.md"
+    - ".agentplane/tasks/202606051427-5XTPQE/quality/20260605-144328868-recovery-context/quality-report.json"
+    - ".agentplane/tasks/202606051427-5XTPQE/quality/20260605-144328868-recovery-context/evaluator-prompt.md"
+    - ".agentplane/tasks/202606051427-5XTPQE/quality/20260605-144328868-recovery-context/evaluator-opinion.md"
     - ".agentplane/tasks/202606051427-5XTPQE/blueprint/resolved-snapshot.json"
     - "29/29 tests"
   findings:
