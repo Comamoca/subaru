@@ -572,25 +572,28 @@ gleam_stdlib = ">= 0.40.0 and < 2.0.0"
 
     const result = await stdlibLoader.loadAll(this.projectId, trackingWriteModule);
 
+    // Normalize FFI naming conventions: some packages (like gleam_stdlib)
+    // use a $ to separate module and type names in import specifiers (e.g.
+    // DecodeError$DecodeError), but the Gleam WASM compiler v1.11+ generates
+    // code that exports without the $ prefix. We only fix references to
+    // compiled Gleam modules (not stubs like gleam.mjs which still use $).
+    if (result.ffiFiles && result.ffiFiles.length > 0) {
+      for (const ffiFile of result.ffiFiles) {
+        if (ffiFile.path === "gleam_stdlib.mjs") {
+          ffiFile.content = ffiFile.content.replace(
+            /(\w+)\$(\w+)(?=.*from\s+["']\.\/gleam\/)/g,
+            (_match, _ns, name) => name,
+          );
+        }
+      }
+    }
+
     // Collect FFI files from loaded packages
     if (result.ffiFiles && result.ffiFiles.length > 0) {
       for (const ffiFile of result.ffiFiles) {
         this.ffiFiles.set(ffiFile.path, ffiFile.content);
       }
       this.logger.debug(`✓ Collected ${result.ffiFiles.length} FFI files`);
-    }
-
-    // Write FFI files to the WASM virtual filesystem so the compiler can
-    // find and copy them during the copying_native_source_files step
-    if (result.ffiFiles && result.ffiFiles.length > 0) {
-      for (const ffiFile of result.ffiFiles) {
-        try {
-          this.wasm.writeFile(this.projectId, `src/${ffiFile.path}`, ffiFile.content);
-          this.logger.debug(`✓ Wrote FFI file to VFS: src/${ffiFile.path}`);
-        } catch (error) {
-          this.logger.warn(`⚠ Failed to write FFI file src/${ffiFile.path}: ${error}`);
-        }
-      }
     }
 
     // Log any errors (but don't fail - fallback modules may still work)
