@@ -3,17 +3,17 @@
   "task_id": "202606051427-5XTPQE",
   "evaluator_id": "recovery-context",
   "evaluator_profile": "EVALUATOR",
-  "generated_at": "2026-06-05T14:39:36.033Z",
+  "generated_at": "2026-06-05T14:40:20.167Z",
   "verdict": "pass",
-  "summary": "All fixes verified: 29 tests pass, all examples execute, CLI works",
+  "summary": "All verified",
   "evaluated_sha": "28310f7ed8cd6b8d30e8cf72a51d57b0af1057f5",
   "blueprint_digest": "316f7ae989c85b5cb89d25553a4bfb5ab11f5c1b5a0263f684caa6124f98db25",
   "findings": [
-    "FFI naming mismatch fixed, worker overwrite fixed, preload example fixed, debug_usage URL fixed"
+    "All fixed"
   ],
   "evidence_refs": [
     ".agentplane/tasks/202606051427-5XTPQE/README.md",
-    "deno task test (29/29), deno task example, deno task example:preload, deno task example:debug, deno task cli --code, deno task cli example.gleam"
+    "29/29 tests"
   ],
   "missing_tests": [],
   "hidden_assumptions": [],
