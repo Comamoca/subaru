@@ -4,7 +4,7 @@ title: "Fix runtime module resolution bugs"
 status: "DOING"
 priority: "high"
 owner: "ORCHESTRATOR"
-revision: 6
+revision: 7
 origin:
   system: "manual"
 depends_on: []
@@ -24,20 +24,20 @@ verification:
   attempts: 0
 quality_review:
   state: "pass"
-  updated_at: "2026-06-05T14:39:00.825Z"
+  updated_at: "2026-06-05T14:39:36.033Z"
   updated_by: "EVALUATOR"
-  note: "All fixes verified: 29 tests pass, all examples execute successfully, CLI codepaths work"
+  note: "All fixes verified: 29 tests pass, all examples execute, CLI works"
   evaluated_sha: "c2601a1d22ebe1a716e4dbd25f4b261d3fdf1ca3"
   blueprint_digest: "316f7ae989c85b5cb89d25553a4bfb5ab11f5c1b5a0263f684caa6124f98db25"
   evidence_refs:
     - ".agentplane/tasks/202606051427-5XTPQE/README.md"
-    - ".agentplane/tasks/202606051427-5XTPQE/quality/20260605-143900825-recovery-context/quality-report.json"
-    - ".agentplane/tasks/202606051427-5XTPQE/quality/20260605-143900825-recovery-context/evaluator-prompt.md"
-    - ".agentplane/tasks/202606051427-5XTPQE/quality/20260605-143900825-recovery-context/evaluator-opinion.md"
+    - ".agentplane/tasks/202606051427-5XTPQE/quality/20260605-143936033-recovery-context/quality-report.json"
+    - ".agentplane/tasks/202606051427-5XTPQE/quality/20260605-143936033-recovery-context/evaluator-prompt.md"
+    - ".agentplane/tasks/202606051427-5XTPQE/quality/20260605-143936033-recovery-context/evaluator-opinion.md"
     - ".agentplane/tasks/202606051427-5XTPQE/blueprint/resolved-snapshot.json"
-    - "deno task test (29/29 pass), deno task example (Hello+Math), deno task example:preload (Hello World! + 5+3=8), deno task example:debug (remote script works), deno task cli --code (Hello from WASM!), deno task cli example.gleam (Hello from file!)"
+    - "deno task test (29/29), deno task example, deno task example:preload, deno task example:debug, deno task cli --code, deno task cli example.gleam"
   findings:
-    - "gleam_stdlib.mjs FFI naming convention mismatch fixed via regex normalization at load time"
+    - "FFI naming mismatch fixed, worker overwrite fixed, preload example fixed, debug_usage URL fixed"
 commit: null
 comments:
   -
