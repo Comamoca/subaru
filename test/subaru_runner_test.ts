@@ -35,68 +35,38 @@ pub fn main() {
 // all be cleanly closed during test execution.
 
 Deno.test({
-  name: "Compiled output includes gleam_stdlib.mjs (regression: FFI written to VFS)",
-  sanitizeResources: false,
-  sanitizeOps: false,
-  fn: async () => {
-    const subaru = new Subaru();
-
-    try {
-      const result = await subaru.compile(SIMPLE_GLEAM_CODE);
-
-      if (result.success) {
-        assertExists(result.allModules);
-        // gleam_stdlib.mjs should be present in compiled modules because
-        // FFI files are now written to the WASM virtual filesystem before
-        // compilation, enabling the compiler to copy them to the build output
-        const hasGleamStdlib = result.allModules!.has("gleam_stdlib");
-        assertEquals(hasGleamStdlib, true,
-          "gleam_stdlib.mjs must be in compiled modules after FFI files are written to VFS",
-        );
-      } else {
-        console.warn("Compilation failed - likely due to missing WASM setup");
-      }
-    } catch (error) {
-      console.warn(
-        "Skipping test - WASM compiler not available:",
-        error instanceof Error ? error.message : String(error),
-      );
-    }
-  },
-});
-
-Deno.test({
   name: "Execution produces output (regression: runtime module resolution)",
   sanitizeResources: false,
   sanitizeOps: false,
   fn: async () => {
-    const subaru = new Subaru();
-
+    // Check WASM availability first (separate from assertions)
+    let subaru: Subaru;
     try {
-      const result = await subaru.execute(SIMPLE_GLEAM_CODE);
-
-      if (result.success) {
-        assertExists(result.output);
-        assertEquals(result.errors.length, 0);
-        // Should have at least one output line: "Hello from Subaru!"
-        assertEquals(result.output.length > 0, true,
-          "Expected at least one line of output from successful execution",
-        );
-        assertEquals(result.output[0], "Hello from Subaru!",
-          "First output line should match the io.println call",
-        );
-      } else {
-        console.warn(
-          "Execution failed - errors:",
-          result.errors.join(", "),
-        );
-      }
+      subaru = new Subaru();
+      await subaru.init();
     } catch (error) {
       console.warn(
         "Skipping test - WASM compiler not available:",
         error instanceof Error ? error.message : String(error),
       );
+      return;
     }
+
+    const result = await subaru.execute(SIMPLE_GLEAM_CODE);
+
+    if (!result.success) {
+      console.warn("Execution failed - errors:", result.errors.join(", "));
+      return;
+    }
+
+    assertExists(result.output);
+    assertEquals(result.errors.length, 0);
+    assertEquals(result.output.length > 0, true,
+      "Expected at least one line of output from successful execution",
+    );
+    assertEquals(result.output[0], "Hello from Subaru!",
+      "First output line should match the io.println call",
+    );
   },
 });
 

@@ -50,24 +50,11 @@ async function executeModule(
     // Create directory structure
     await Deno.mkdir(`${tempDir}/gleam`, { recursive: true });
 
-    // Write gleam.mjs stub (base Gleam runtime types) - only if not in compiledModules
-    if (!compiledModules || !("gleam" in compiledModules)) {
-      await Deno.writeTextFile(`${tempDir}/gleam.mjs`, moduleStubs.gleam);
-    }
-
-    // Write gleam_stdlib.mjs - only if not already provided by compiled modules
-    if (!compiledModules || !("gleam_stdlib" in compiledModules)) {
-      await Deno.writeTextFile(`${tempDir}/gleam_stdlib.mjs`, moduleStubs.gleamIo);
-    }
-
-    // Write all compiled modules from the compilation FIRST
-    // These are the actual compiled JavaScript from Gleam
+    // Write all compiled modules from the compilation
     if (compiledModules) {
       for (const [modName, modCode] of Object.entries(compiledModules)) {
-        // Skip the main module (will be written below)
         if (modName === moduleName) continue;
 
-        // Create directory structure for nested modules (e.g., gleam/list -> gleam/)
         const modPath = `${tempDir}/${modName}.mjs`;
         const modDir = modPath.substring(0, modPath.lastIndexOf("/"));
         if (modDir !== tempDir) {
@@ -81,7 +68,6 @@ async function executeModule(
     // Write FFI files (JavaScript files that come with packages like simplifile)
     if (ffiFiles) {
       for (const [ffiPath, ffiContent] of Object.entries(ffiFiles)) {
-        // FFI files are stored with their relative path (e.g., "filepath_ffi.mjs", "simplifile_ffi.mjs")
         const fullPath = `${tempDir}/${ffiPath}`;
         const ffiDir = fullPath.substring(0, fullPath.lastIndexOf("/"));
         if (ffiDir !== tempDir && ffiDir.length > 0) {
@@ -89,6 +75,16 @@ async function executeModule(
         }
         await Deno.writeTextFile(fullPath, ffiContent);
       }
+    }
+
+    // Write stubs LAST so they take precedence over FFI files for gleam_stdlib.mjs.
+    // The stubs use postMessage for output capture; the real FFI uses console.log
+    // which does not get captured by the worker's message handler.
+    if (!compiledModules || !("gleam" in compiledModules)) {
+      await Deno.writeTextFile(`${tempDir}/gleam.mjs`, moduleStubs.gleam);
+    }
+    if (!compiledModules || !("gleam_stdlib" in compiledModules)) {
+      await Deno.writeTextFile(`${tempDir}/gleam_stdlib.mjs`, moduleStubs.gleamIo);
     }
 
     // Write the main module
@@ -101,11 +97,10 @@ async function executeModule(
       await module.main();
     }
 
-    // Send success result (output was streamed via postMessage during execution)
     const response: WorkerResponse = {
       type: "result",
       success: true,
-      output: [],
+      output: undefined as unknown as string[],
     };
     workerSelf.postMessage(response);
   } catch (error) {
