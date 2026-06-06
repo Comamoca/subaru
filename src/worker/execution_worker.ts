@@ -50,20 +50,11 @@ async function executeModule(
     // Create directory structure
     await Deno.mkdir(`${tempDir}/gleam`, { recursive: true });
 
-    // Write gleam.mjs stub (base Gleam runtime types)
-    await Deno.writeTextFile(`${tempDir}/gleam.mjs`, moduleStubs.gleam);
-
-    // Write gleam_stdlib.mjs using the postMessage-based IO stub from runner
-    await Deno.writeTextFile(`${tempDir}/gleam_stdlib.mjs`, moduleStubs.gleamIo);
-
-    // Write all compiled modules from the compilation FIRST
-    // These are the actual compiled JavaScript from Gleam
+    // Write all compiled modules from the compilation
     if (compiledModules) {
       for (const [modName, modCode] of Object.entries(compiledModules)) {
-        // Skip the main module (will be written below)
         if (modName === moduleName) continue;
 
-        // Create directory structure for nested modules (e.g., gleam/list -> gleam/)
         const modPath = `${tempDir}/${modName}.mjs`;
         const modDir = modPath.substring(0, modPath.lastIndexOf("/"));
         if (modDir !== tempDir) {
@@ -74,10 +65,19 @@ async function executeModule(
       }
     }
 
-    // Write FFI files (JavaScript files that come with packages like simplifile)
+    // Write stubs for modules the compiler didn't produce
+    if (!compiledModules || !("gleam" in compiledModules)) {
+      await Deno.writeTextFile(`${tempDir}/gleam.mjs`, moduleStubs.gleam);
+    }
+    if (!compiledModules || !("gleam_stdlib" in compiledModules)) {
+      await Deno.writeTextFile(`${tempDir}/gleam_stdlib.mjs`, moduleStubs.gleamIo);
+    }
+
+    // Write FFI files LAST so they take precedence over stubs.
+    // FFI files contain ALL function implementations compiled modules need.
+    // Console output is captured via the console override below.
     if (ffiFiles) {
       for (const [ffiPath, ffiContent] of Object.entries(ffiFiles)) {
-        // FFI files are stored with their relative path (e.g., "filepath_ffi.mjs", "simplifile_ffi.mjs")
         const fullPath = `${tempDir}/${ffiPath}`;
         const ffiDir = fullPath.substring(0, fullPath.lastIndexOf("/"));
         if (ffiDir !== tempDir && ffiDir.length > 0) {
@@ -86,6 +86,17 @@ async function executeModule(
         await Deno.writeTextFile(fullPath, ffiContent);
       }
     }
+
+    // Override console.log/error to use postMessage for output capture
+    // This ensures FFI files that use console.log also get captured
+    const originalLog = console.log;
+    const originalError = console.error;
+    console.log = (...args: unknown[]) => {
+      self.postMessage({ type: "output", line: args.map(String).join(" ") });
+    };
+    console.error = (...args: unknown[]) => {
+      self.postMessage({ type: "output", line: args.map(String).join(" ") });
+    };
 
     // Write the main module
     const tempFile = `${tempDir}/${moduleName}.mjs`;
@@ -97,11 +108,10 @@ async function executeModule(
       await module.main();
     }
 
-    // Send success result (output was streamed via postMessage during execution)
     const response: WorkerResponse = {
       type: "result",
       success: true,
-      output: [],
+      output: undefined as unknown as string[],
     };
     workerSelf.postMessage(response);
   } catch (error) {

@@ -1,6 +1,6 @@
 #!/usr/bin/env -S deno run --allow-read --allow-write --allow-net --allow-run
 
-import Subaru from "../src/subaru_runner.ts";
+import Subaru from "../../src/subaru_runner.ts";
 
 const gleamCode = `
 import gleam/io
@@ -45,7 +45,7 @@ async function testDebugModes() {
   console.log("---------------------------");
   try {
     const remoteResult = await Subaru.runFromUrl(
-      "https://raw.githubusercontent.com/Comamoca/subaru/main/examples/remote_example.gleam",
+      "https://raw.githubusercontent.com/Comamoca/subaru/main/examples/gleam/remote_example.gleam",
       { logLevel: "silent" },
     );
 
