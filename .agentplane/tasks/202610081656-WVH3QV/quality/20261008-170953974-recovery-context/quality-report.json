@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "task_id": "202610081656-WVH3QV",
+  "evaluator_id": "recovery-context",
+  "evaluator_profile": "EVALUATOR",
+  "generated_at": "2026-10-08T17:09:53.974Z",
+  "verdict": "pass",
+  "summary": "Deno 2.4.5 blocked every TS-executing task on the text import attribute; the fix adds --unstable-raw-imports to exactly those tasks, repairs the never-matching examples glob, and unblocks type checking of the examples.",
+  "evaluated_sha": "daba6ee16bb398a851a3f47e755fecc7b72ffce4",
+  "blueprint_digest": "b6d31443f00153590c347e0e7c8275c0b8a179f22cdc7517b5faf08ef9684b68",
+  "findings": [
+    "deno task cli/compile/test/check died before any work with 'import attribute type of text is unsupported'; additionally check globbed examples/*.ts which never existed."
+  ],
+  "evidence_refs": [
+    ".agentplane/tasks/202610081656-WVH3QV/README.md",
+    "deno task check"
+  ],
+  "missing_tests": [],
+  "hidden_assumptions": [],
+  "residual_risks": []
+}

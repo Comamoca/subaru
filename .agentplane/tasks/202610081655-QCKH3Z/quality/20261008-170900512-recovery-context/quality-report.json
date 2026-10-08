@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "task_id": "202610081655-QCKH3Z",
+  "evaluator_id": "recovery-context",
+  "evaluator_profile": "EVALUATOR",
+  "generated_at": "2026-10-08T17:09:00.512Z",
+  "verdict": "pass",
+  "summary": "Compiler default bump is minimal, matches the runtime that was already verified working, and closes a real link-time failure on gleam_json 3.x dependency graphs.",
+  "evaluated_sha": "daba6ee16bb398a851a3f47e755fecc7b72ffce4",
+  "blueprint_digest": "85c1ca666b9f26f8ba89f6e9d7b30755985637b2fcd2e1f64e6e30addda9da20",
+  "findings": [
+    "Pinned GLEAM_VERSION 1.11.0 predates the $-mangled constructor exports gleam_json 3.x FFI imports (requires gleam >= 1.13); fixed to 1.18.1."
+  ],
+  "evidence_refs": [
+    ".agentplane/tasks/202610081655-QCKH3Z/README.md",
+    "grep -n 'GLEAM_VERSION' src/setup.ts | grep 1.18.1"
+  ],
+  "missing_tests": [],
+  "hidden_assumptions": [],
+  "residual_risks": []
+}
