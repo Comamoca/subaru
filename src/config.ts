@@ -129,16 +129,26 @@ pub fn add(a: Int, b: Int) -> Int {
       // "standard" - gleam_stdlib, gleam_javascript, gleam_json
       // "full" - all 8 builtin packages (default)
       preset: "full",
-      // Additional third-party packages to load (beyond the builtin preset packages)
+      // Additional third-party packages to load (beyond the builtin preset packages).
+      // Dependencies of these packages are resolved and loaded as well, so only
+      // the packages you import need to be listed here.
       packages: [
-        // "lustre",  // Just package name (uses latest version)
-        // { name: "gleam_otp", version: "0.10.0" },  // Specific version
+        // "lustre",  // Just package name (newest version the graph allows)
+        // { name: "gleam_otp", version: "0.10.0" },  // Exact version
+        // { name: "gleam_json", version: ">= 2.0.0 and < 4.0.0" },  // Hex requirement
+        // { name: "argv", git: "https://github.com/lpil/argv", ref: "v1.1.0" },  // Git
+        // { name: "mylib", path: "./libs/mylib" },  // Local directory
         // {
         //   name: "some_package",
         //   include: ["some/module"],  // Load only specific modules
         //   exclude: ["some/module/internal"],  // Exclude specific modules
         // },
       ],
+      // Set to false to load only the packages listed above, without resolving
+      // their dependencies
+      resolve: true,
+      // Directory that relative `path` dependencies resolve against
+      baseDir: ".",
       cache: {
         enabled: true,
         ttl: 604800, // 7 days in seconds

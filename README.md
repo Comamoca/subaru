@@ -166,12 +166,12 @@ Subaru automatically loads Gleam packages from [Hex.pm](https://hex.pm) when exe
 
 The `preset` option controls which builtin packages are automatically loaded:
 
-| Preset | Loaded Packages | Description |
-|--------|----------------|-------------|
-| `none` | None | No builtin packages (equivalent to `--no-stdlib`) |
-| `minimal` | gleam_stdlib | Core types and functions only |
-| `standard` | gleam_stdlib, gleam_javascript, gleam_json | Core + JavaScript interop + JSON |
-| `full` | All 8 packages | Full standard library (default) |
+| Preset     | Loaded Packages                            | Description                                       |
+| ---------- | ------------------------------------------ | ------------------------------------------------- |
+| `none`     | None                                       | No builtin packages (equivalent to `--no-stdlib`) |
+| `minimal`  | gleam_stdlib                               | Core types and functions only                     |
+| `standard` | gleam_stdlib, gleam_javascript, gleam_json | Core + JavaScript interop + JSON                  |
+| `full`     | All 8 packages                             | Full standard library (default)                   |
 
 The 8 builtin packages are: `gleam_stdlib`, `gleam_javascript`, `gleam_json`, `gleam_http`, `gleam_fetch`, `plinth`, `filepath`, `simplifile`.
 
@@ -195,6 +195,58 @@ Create a `subaru.config.json` file:
 }
 ```
 
+### Dependency Resolution
+
+Listed packages are resolved together with everything they depend on, so only
+the packages you actually import need to be named. Versions are picked the way
+`gleam deps download` picks them: the newest release every requirement in the
+graph allows.
+
+```json
+{
+  "standardLibrary": {
+    "packages": ["sqlode"]
+  }
+}
+```
+
+`sqlode` alone pulls in `argv`, `glint`, `gleam_regexp`, `yay`, `snag`,
+`gleam_community_colour` and `gleam_community_ansi` at compatible versions.
+
+Set `resolve` to `false` to go back to loading only what is listed, with no
+transitive dependencies.
+
+### Package Sources
+
+A package can come from Hex.pm, from a git repository or from a local
+directory. Git access uses [isomorphic-git](https://isomorphic-git.org), so no
+`git` binary is required.
+
+```json
+{
+  "standardLibrary": {
+    "baseDir": ".",
+    "packages": [
+      "lustre",
+      { "name": "gleam_otp", "version": "0.10.0" },
+      { "name": "argv", "git": "https://github.com/lpil/argv", "ref": "v1.1.0" },
+      { "name": "mylib", "path": "./libs/mylib" }
+    ]
+  }
+}
+```
+
+| Source | Keys                                  | Version                                  | Dependency information |
+| ------ | ------------------------------------- | ---------------------------------------- | ---------------------- |
+| Hex.pm | `version` (optional)                  | Negotiated during resolution             | Hex registry           |
+| Git    | `git` + `ref` (branch, tag or commit) | Taken from the repository's `gleam.toml` | That `gleam.toml`      |
+| Local  | `path`                                | Taken from the directory's `gleam.toml`  | That `gleam.toml`      |
+
+- `ref` is resolved to a commit id, so a branch name still pins one revision per run.
+- `path` is relative to `baseDir` (default: the current directory).
+- Local packages are read in place and never cached, so edits take effect on the next run.
+- Git clones are cached under `~/.cache/subaru/git/<repo>/<commit>/`.
+
 ### Version Pinning
 
 Pin package versions for reproducible builds:
@@ -208,6 +260,9 @@ Pin package versions for reproducible builds:
   }
 }
 ```
+
+The `version` field accepts any Hex requirement, not just an exact version:
+`">= 1.0.0 and < 2.0.0"`, `"~> 1.2"` and `"~> 0.34 or ~> 1.0"` all work.
 
 ### Selective Module Loading
 
@@ -229,6 +284,9 @@ Use `include` and `exclude` to load only specific modules from a package:
 ### Cache Management
 
 Packages are cached locally at `~/.cache/subaru/packages/` (7-day TTL by default).
+Resolution also caches the Hex registry entry of each package it looks at under
+`~/.cache/subaru/registry/` (revalidated with an ETag), and git packages under
+`~/.cache/subaru/git/`.
 
 ```sh
 # Clear package cache only
@@ -249,7 +307,6 @@ subaru --clean-cache
 ```sh
 subaru --init-config
 ```
-
 
 ## 📝 Todo
 
@@ -274,6 +331,7 @@ This project is open source and available under the MIT License.
 
 - **Deno Standard Library** - File system, path utilities, testing
 - **Gleam WASM Compiler** - Dynamic Gleam compilation to JavaScript
+- **isomorphic-git** - Git access for git-sourced packages, without a `git` binary
 
 #### Preloaded Gleam Libraries
 
