@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "task_id": "202610081721-RC3B9S",
+  "evaluator_id": "recovery-context",
+  "evaluator_profile": "EVALUATOR",
+  "generated_at": "2026-10-08T17:43:39.770Z",
+  "verdict": "pass",
+  "summary": "Nested --module entries compile and run through the module alias; top-level entries are unchanged.",
+  "evaluated_sha": "6828bae0b998d7a4176c69cba9907f740a98e9d9",
+  "blueprint_digest": "891567da573ea49af1343c8b8ffdbff092cab7b0d4b59fb83e327d9d18eb77f3",
+  "findings": [
+    "entryAlias derives the last path segment and the synthesized entry imports it explicitly; validated end to end with hinoto/cli."
+  ],
+  "evidence_refs": [
+    ".agentplane/tasks/202610081721-RC3B9S/README.md",
+    "deno test --allow-all --unstable-worker-options --unstable-raw-imports test/ (86 passed, 0 failed)"
+  ],
+  "missing_tests": [],
+  "hidden_assumptions": [],
+  "residual_risks": []
+}

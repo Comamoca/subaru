@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "task_id": "202610081721-ETNS0E",
+  "evaluator_id": "recovery-context",
+  "evaluator_profile": "EVALUATOR",
+  "generated_at": "2026-10-08T17:44:06.722Z",
+  "verdict": "pass",
+  "summary": "Program exit is trapped in the worker: exit() from node:process no longer kills the worker, the status is reported, and captured output survives failures and timeouts.",
+  "evaluated_sha": "6828bae0b998d7a4176c69cba9907f740a98e9d9",
+  "blueprint_digest": "c89504bbc516c5f62634e11fe02155139700adcbbb2a9e38a7288fe34c50eee2",
+  "findings": [
+    "node:process imports are pointed at a subaru shim (_ffi/_subaru/process.mjs); Deno.exit is replaced in the worker; RunResult carries exitCode; the CLI prints output on failure and exits with the program's status."
+  ],
+  "evidence_refs": [
+    ".agentplane/tasks/202610081721-ETNS0E/README.md",
+    "deno test --allow-all --unstable-worker-options --unstable-raw-imports test/ (86 passed, 0 failed); birdie --help inside a Gleam project prints its help and exits 0; birdie version reports 'Program exited with status 1' with output kept"
+  ],
+  "missing_tests": [],
+  "hidden_assumptions": [],
+  "residual_risks": []
+}
