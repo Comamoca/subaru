@@ -17,7 +17,11 @@
  *     the build directory (`../../build/dev/javascript/lustre/...`) names a
  *     compiled module in the flat tree, so the package segment is dropped; a
  *     path matching a known FFI file follows that file into its namespace.
+ *   - Both passes send `node:process` to the shim in `_ffi/_subaru/`, so a
+ *     program's own `exit` cannot kill the worker.
  */
+
+import { isProcessSpecifier, PROCESS_SHIM_FILE, PROCESS_SHIM_PACKAGE } from "./process_shim.ts";
 
 /** Directory that holds the per-package FFI trees. */
 export const FFI_ROOT = "_ffi";
@@ -168,6 +172,14 @@ export function rewriteCompiledFfiImports(
   return content.replace(
     COMPILED_SPECIFIER,
     (match, prefix, quote, specifier) => {
+      // Programs end by calling `exit` from node:process. Point that import at
+      // the shim so the exit stays inside the worker instead of tearing it
+      // down behind the host's back.
+      if (isProcessSpecifier(specifier)) {
+        const target = namespaceFfiPath(PROCESS_SHIM_PACKAGE, PROCESS_SHIM_FILE);
+        return `${prefix}${quote}${relativeSpecifier(moduleDir, target)}${quote}`;
+      }
+
       if (!specifier.startsWith(".")) return match;
 
       const resolved = resolveAgainst(moduleDir, specifier);
@@ -225,6 +237,13 @@ export function rewriteFfiFile(
   return content.replace(
     COMPILED_SPECIFIER,
     (match, prefix, quote, specifier) => {
+      if (isProcessSpecifier(specifier)) {
+        const target = namespaceFfiPath(PROCESS_SHIM_PACKAGE, PROCESS_SHIM_FILE);
+        const rewritten = relativeSpecifier(sourceDir, target);
+        options.onRewrite?.(specifier, rewritten);
+        return `${prefix}${quote}${rewritten}${quote}`;
+      }
+
       if (specifier.startsWith("/") || PASSTHROUGH_SCHEME.test(specifier)) return match;
 
       let target: string | undefined;

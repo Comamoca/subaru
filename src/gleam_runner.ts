@@ -3,6 +3,11 @@ import { Logger, type LogLevel } from "./logger.ts";
 import { WasmModule } from "./wasm/wasm_module.ts";
 import { createStdlibLoader, type FFIFile, type StandardLibraryConfig } from "./stdlib/mod.ts";
 import {
+  PROCESS_SHIM_FILE,
+  PROCESS_SHIM_PACKAGE,
+  PROCESS_SHIM_SOURCE,
+} from "./stdlib/process_shim.ts";
+import {
   buildFfiLayout,
   namespaceFfiPath,
   rewriteCompiledFfiImports,
@@ -38,6 +43,11 @@ export interface RunResult {
   success: boolean;
   output: string[];
   errors: string[];
+  /**
+   * Status the program asked for when it ended by calling exit, or undefined
+   * when it just returned from `main`.
+   */
+  exitCode?: number;
 }
 
 export interface PreloadScript {
@@ -429,17 +439,22 @@ gleam_stdlib = ">= 0.40.0 and < 2.0.0"
       };
     }
 
+    // Output collected before a failure or timeout is still the program's
+    // output, so it travels out with the error instead of being dropped.
+    const output: string[] = [];
+
     try {
       return await this.executeJavaScript(
         compileResult.javascript!,
         moduleName,
         compileResult.allModules,
         compileResult.ffiFiles,
+        output,
       );
     } catch (error) {
       return {
         success: false,
-        output: [],
+        output,
         errors: [`Runtime error: ${error}`],
       };
     }
@@ -450,8 +465,9 @@ gleam_stdlib = ">= 0.40.0 and < 2.0.0"
     moduleName: string = "main",
     allModules?: Map<string, string>,
     ffiFiles?: Map<string, string>,
+    output: string[] = [],
   ): Promise<RunResult> {
-    return await this.realJavaScriptExecution(jsCode, moduleName, [], allModules, ffiFiles);
+    return await this.realJavaScriptExecution(jsCode, moduleName, output, allModules, ffiFiles);
   }
 
   /**
@@ -515,6 +531,10 @@ gleam_stdlib = ">= 0.40.0 and < 2.0.0"
   ): Promise<RunResult> {
     const tempDir = await Deno.makeTempDir();
 
+    // Compiled modules carry the FFI rewrites, including the node:process
+    // shim, so the entry program runs from its rewritten copy too.
+    const programCode = allModules?.get(moduleName) ?? jsCode;
+
     try {
       // Create worker with explicit Deno permissions
       const workerUrl = new URL("./worker/execution_worker.ts", import.meta.url);
@@ -552,13 +572,16 @@ gleam_stdlib = ">= 0.40.0 and < 2.0.0"
               output.push(response.line);
             }
           } else if (response.type === "result") {
-            // Execution complete
+            // Execution complete. A program that ended by calling exit reports
+            // the status here, and a non-zero status is a failed run.
             clearTimeout(timeoutId);
             worker.terminate();
+            const exitCode = typeof response.exitCode === "number" ? response.exitCode : 0;
             resolve({
-              success: true,
+              success: exitCode === 0,
               output: response.output || output,
-              errors: [],
+              errors: exitCode === 0 ? [] : [`Program exited with status ${exitCode}`],
+              exitCode,
             });
           } else if (response.type === "error") {
             clearTimeout(timeoutId);
@@ -605,7 +628,7 @@ gleam_stdlib = ">= 0.40.0 and < 2.0.0"
       worker.postMessage({
         type: "execute",
         payload: {
-          jsCode,
+          jsCode: programCode,
           moduleName,
           tempDir,
           moduleStubs,
@@ -767,6 +790,14 @@ gleam_stdlib = ">= 0.40.0 and < 2.0.0"
       `✓ Namespaced ${namespaced.size} FFI files (${rewrites} imports rewritten); ` +
         `rewired ${moduleRewrites} compiled modules`,
     );
+
+    // The shim `node:process` imports are pointed at, so a program's own exit
+    // cannot kill the worker that runs it.
+    namespaced.set(
+      namespaceFfiPath(PROCESS_SHIM_PACKAGE, PROCESS_SHIM_FILE),
+      PROCESS_SHIM_SOURCE,
+    );
+
     return namespaced;
   }
 

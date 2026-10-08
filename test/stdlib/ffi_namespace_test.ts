@@ -191,3 +191,38 @@ Deno.test("cross-package collision: same relative path, two packages", () => {
     `import x from "../_ffi/beta/ffi.mjs";`,
   );
 });
+
+Deno.test("node:process imports are sent to the subaru shim", () => {
+  // FFI files reach exit (birdie) or argv-related helpers (yay) through
+  // node:process; the shim keeps exit inside the worker.
+  const processLayout = buildFfiLayout(
+    [{ path: "birdie_ffi.mjs", packageName: "birdie", content: "" }],
+    [{ moduleName: "birdie", packageName: "birdie" }],
+  );
+
+  assertEquals(
+    rewriteFfiFile(`import { exit } from "node:process";`, {
+      packageName: "birdie",
+      ffiPath: "birdie_ffi.mjs",
+      layout: processLayout,
+      knownPackages: new Set(["birdie"]),
+    }),
+    `import { exit } from "../_subaru/process.mjs";`,
+  );
+
+  assertEquals(
+    rewriteCompiledFfiImports(`import { exit } from "node:process";`, "main", processLayout),
+    `import { exit } from "./_ffi/_subaru/process.mjs";`,
+  );
+
+  // Everything else still passes through untouched.
+  assertEquals(
+    rewriteFfiFile(`import fs from "node:fs";`, {
+      packageName: "birdie",
+      ffiPath: "birdie_ffi.mjs",
+      layout: processLayout,
+      knownPackages: new Set(["birdie"]),
+    }),
+    `import fs from "node:fs";`,
+  );
+});

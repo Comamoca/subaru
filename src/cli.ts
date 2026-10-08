@@ -5,6 +5,25 @@ import Subaru from "./subaru_runner.ts";
 import { createExampleConfig, loadConfig, saveConfig, type SubaruConfigFile } from "./config.ts";
 import { cleanAllCache } from "./setup.ts";
 import { cleanPackageCache } from "./hex/mod.ts";
+import type { RunResult } from "./gleam_runner.ts";
+
+/**
+ * Print a finished run, keeping the output the program produced even when the
+ * run failed or timed out; those lines are usually the reason it failed.
+ *
+ * @returns never, because the process exits with the run's status.
+ */
+function reportRunResult(result: RunResult): never {
+  result.output.forEach((line) => console.log(line));
+
+  if (result.success) {
+    Deno.exit(0);
+  }
+
+  console.error("Execution failed:");
+  result.errors.forEach((error) => console.error(`  ${error}`));
+  Deno.exit(result.exitCode && result.exitCode !== 0 ? result.exitCode : 1);
+}
 
 interface CliOptions {
   help: boolean;
@@ -140,14 +159,7 @@ async function runFromUrl(url: string, config: SubaruConfigFile): Promise<void> 
       }
     } else {
       const result = await subaru.executeFromUrl(url);
-
-      if (result.success) {
-        result.output.forEach((line) => console.log(line));
-      } else {
-        console.error("Execution failed:");
-        result.errors.forEach((error) => console.error(`  ${error}`));
-        Deno.exit(1);
-      }
+      reportRunResult(result);
     }
   } catch (error) {
     console.error("Error:", error instanceof Error ? error.message : String(error));
@@ -164,14 +176,7 @@ async function runFromGit(
   try {
     const subaru = new Subaru(config);
     const result = await subaru.executeFromGit(url, ref, module);
-
-    if (result.success) {
-      result.output.forEach((line) => console.log(line));
-    } else {
-      console.error("Execution failed:");
-      result.errors.forEach((error) => console.error(`  ${error}`));
-      Deno.exit(1);
-    }
+    reportRunResult(result);
   } catch (error) {
     console.error("Error:", error instanceof Error ? error.message : String(error));
     Deno.exit(1);
@@ -208,14 +213,7 @@ async function runCode(
       }
     } else {
       const result = await subaru.execute(code, moduleName);
-
-      if (result.success) {
-        result.output.forEach((line) => console.log(line));
-      } else {
-        console.error("Execution failed:");
-        result.errors.forEach((error) => console.error(`  ${error}`));
-        Deno.exit(1);
-      }
+      reportRunResult(result);
     }
   } catch (error) {
     console.error("Error:", error instanceof Error ? error.message : String(error));

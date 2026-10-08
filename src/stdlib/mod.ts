@@ -20,6 +20,26 @@ export {
 } from "./builtin_packages.ts";
 
 export {
+  buildFfiLayout,
+  FFI_ROOT,
+  type FfiEntry,
+  type FfiLayout,
+  namespaceFfiPath,
+  rewriteCompiledFfiImports,
+  rewriteFfiFile,
+} from "./ffi_namespace.ts";
+
+export {
+  EXIT_SIGNAL_PREFIX,
+  EXIT_TRAP_GLOBAL,
+  isProcessSpecifier,
+  parseExitStatus,
+  PROCESS_SHIM_FILE,
+  PROCESS_SHIM_PACKAGE,
+  PROCESS_SHIM_SOURCE,
+} from "./process_shim.ts";
+
+export {
   createStdlibLoader,
   type FFIFile,
   type LoadedModule,

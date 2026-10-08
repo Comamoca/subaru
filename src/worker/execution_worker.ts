@@ -3,6 +3,8 @@
  * This worker runs with explicit Deno permissions to support file system operations
  */
 
+import { EXIT_SIGNAL_PREFIX, EXIT_TRAP_GLOBAL, parseExitStatus } from "../stdlib/process_shim.ts";
+
 // Message types for communication
 export interface WorkerMessage {
   type: "execute";
@@ -32,6 +34,44 @@ export interface WorkerResponse {
   output?: string[];
   error?: string;
   line?: string;
+  /** Status the program asked for when it ended by calling exit. */
+  exitCode?: number;
+}
+
+/**
+ * Thrown when the program asks to exit, unwinding it inside the worker.
+ *
+ * The message carries the status so the same marker works for the shim, which
+ * lives in the temporary tree and cannot share this module's error class.
+ */
+class ProgramExit extends Error {
+  constructor(status: number) {
+    super(`${EXIT_SIGNAL_PREFIX}${status}`);
+    this.name = "ProgramExit";
+  }
+}
+
+/**
+ * Route program-initiated exits back to the host.
+ *
+ * `exit` from `node:process` ends a Deno worker silently: the host never gets a
+ * result, so the run hangs until the timeout and whatever the program printed
+ * is discarded. The FFI rewrite points `node:process` at the shim, whose exit
+ * calls the trap below, and `Deno.exit` is replaced for programs that reach it
+ * directly. The trap throws instead of exiting, so the worker survives and
+ * reports a result.
+ *
+ * @returns the trap, for callers that want to hand it to the program.
+ */
+function installExitTrap(): (status?: number) => never {
+  const requestExit = (status?: number): never => {
+    throw new ProgramExit(status ?? 0);
+  };
+
+  (globalThis as Record<string, unknown>)[EXIT_TRAP_GLOBAL] = requestExit;
+  (Deno as unknown as { exit: (status?: number) => never }).exit = requestExit;
+
+  return requestExit;
 }
 
 const workerSelf = self as unknown as Worker;
@@ -122,26 +162,39 @@ async function executeModule(
     const tempFile = `${tempDir}/${moduleName}.mjs`;
     await Deno.writeTextFile(tempFile, jsCode);
 
+    // A program that calls exit must not take the worker down with it: the
+    // trap turns that call into a catchable error reported as a result.
+    const requestExit = installExitTrap();
+
     // Expose command-line arguments to the program. Gleam CLIs (e.g. sqlode)
     // go through `argv`, whose JS FFI reads `process.argv` before `Deno.args`;
     // a worker's `Deno.args` is fixed and cannot be assigned, so a minimal
     // `process` shim is what actually reaches the program.
     if (args) {
       const program = programPath ?? `${moduleName}.mjs`;
-      (globalThis as { process?: { argv: string[] } }).process = {
+      (globalThis as { process?: { argv: string[]; exit?: (code?: number) => never } }).process = {
         argv: ["deno", program, ...args],
+        exit: requestExit,
       };
     }
 
     // Execute the module using dynamic import
-    const module = await import(`file://${tempFile}`);
-    if (module.main) {
-      await module.main();
+    let exitCode = 0;
+    try {
+      const module = await import(`file://${tempFile}`);
+      if (module.main) {
+        await module.main();
+      }
+    } catch (error) {
+      const status = parseExitStatus(error);
+      if (status === undefined) throw error;
+      exitCode = status;
     }
 
     const response: WorkerResponse = {
       type: "result",
-      success: true,
+      success: exitCode === 0,
+      exitCode,
       output: undefined as unknown as string[],
     };
     workerSelf.postMessage(response);
