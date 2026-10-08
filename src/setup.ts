@@ -7,7 +7,11 @@
 import { join } from "https://deno.land/std@0.220.0/path/mod.ts";
 import { ensureDir } from "https://deno.land/std@0.220.0/fs/mod.ts";
 
-const GLEAM_VERSION = Deno.env.get("GLEAM_VERSION") || "1.11.0";
+// Default Gleam WASM compiler, bumped from 1.11.0: hex packages such as
+// gleam_json 3.x declare `gleam = ">= 1.13.0"` and their FFI imports the
+// `$`-mangled constructor exports (`DecodeError$UnexpectedByte`) that only
+// newer compilers emit, so 1.11.0 fails at module link time.
+const GLEAM_VERSION = Deno.env.get("GLEAM_VERSION") || "1.18.1";
 
 /**
  * Get the platform-specific base cache directory for Subaru
