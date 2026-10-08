@@ -12,6 +12,9 @@ interface CliOptions {
   file?: string;
   code?: string;
   url?: string;
+  git?: string;
+  ref?: string;
+  module?: string;
   compile?: boolean;
   debug?: boolean;
   "log-level"?: string;
@@ -33,10 +36,11 @@ const HELP_TEXT = `
 Subaru - Gleam code runner using WASM
 
 USAGE:
-    subaru [OPTIONS] [<FILE> | --code <CODE> | --url <URL>]
+    subaru [OPTIONS] [<FILE> | --code <CODE> | --url <URL>] [-- <PROGRAM_ARGS>...]
 
 ARGUMENTS:
     <FILE>                  Gleam file to execute
+    -- <PROGRAM_ARGS>...    Arguments passed through to the Gleam program's argv
 
 OPTIONS:
     -h, --help              Show this help message
@@ -44,6 +48,9 @@ OPTIONS:
     -f, --file <FILE>       Execute Gleam code from file (alternative to <FILE>)
     -c, --code <CODE>       Execute Gleam code from string
     -u, --url <URL>         Execute Gleam code from remote URL
+    --git <URL>             Run a Gleam program from a git repository
+    --ref <REF>             Branch, tag or commit for --git (default: main)
+    --module <MODULE>       Entry module for --git (default: the package name)
     --compile               Only compile, don't execute
     --debug                 Enable debug output
     --log-level <LEVEL>     Set log level (silent|error|warn|info|debug|trace)
@@ -148,6 +155,29 @@ async function runFromUrl(url: string, config: SubaruConfigFile): Promise<void> 
   }
 }
 
+async function runFromGit(
+  url: string,
+  ref: string,
+  module: string | undefined,
+  config: SubaruConfigFile,
+): Promise<void> {
+  try {
+    const subaru = new Subaru(config);
+    const result = await subaru.executeFromGit(url, ref, module);
+
+    if (result.success) {
+      result.output.forEach((line) => console.log(line));
+    } else {
+      console.error("Execution failed:");
+      result.errors.forEach((error) => console.error(`  ${error}`));
+      Deno.exit(1);
+    }
+  } catch (error) {
+    console.error("Error:", error instanceof Error ? error.message : String(error));
+    Deno.exit(1);
+  }
+}
+
 async function runCode(
   code: string,
   config: SubaruConfigFile,
@@ -194,7 +224,12 @@ async function runCode(
 }
 
 async function main(): Promise<void> {
-  const args = parseArgs(Deno.args, {
+  // Everything after `--` belongs to the program being run, not to Subaru.
+  const separator = Deno.args.indexOf("--");
+  const programArgs = separator === -1 ? [] : Deno.args.slice(separator + 1);
+  const ownArgs = separator === -1 ? Deno.args : Deno.args.slice(0, separator);
+
+  const args = parseArgs(ownArgs, {
     boolean: [
       "help",
       "version",
@@ -207,7 +242,18 @@ async function main(): Promise<void> {
       "clean-package-cache",
       "no-stdlib",
     ],
-    string: ["file", "code", "url", "wasm-path", "log-level", "config", "warning-color"],
+    string: [
+      "file",
+      "code",
+      "url",
+      "git",
+      "ref",
+      "module",
+      "wasm-path",
+      "log-level",
+      "config",
+      "warning-color",
+    ],
     alias: {
       h: "help",
       v: "version",
@@ -300,6 +346,8 @@ async function main(): Promise<void> {
       "yellow") as SubaruConfigFile["warningColor"],
     noStdlib: args["no-stdlib"] !== undefined ? args["no-stdlib"] : fileConfig.noStdlib,
     standardLibrary: fileConfig.standardLibrary,
+    // Arguments after `--` are handed to the Gleam program's `argv`.
+    args: programArgs.length > 0 ? programArgs : fileConfig.args,
   };
 
   // Check for positional arguments (file paths)
@@ -311,6 +359,8 @@ async function main(): Promise<void> {
     await runCode(args.code, { ...config, compile: compileOnly });
   } else if (args.url) {
     await runFromUrl(args.url, { ...config, compile: compileOnly });
+  } else if (args.git) {
+    await runFromGit(args.git, args.ref || "main", args.module, config);
   } else if (positionalArgs.length > 0) {
     // Handle positional file argument
     const filePath = positionalArgs[0];

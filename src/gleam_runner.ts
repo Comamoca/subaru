@@ -1,9 +1,26 @@
 import { downloadGleamWasmToPath, getWasmCacheDir } from "./setup.ts";
 import { Logger, type LogLevel } from "./logger.ts";
 import { WasmModule } from "./wasm/wasm_module.ts";
-import { createStdlibLoader, type StandardLibraryConfig } from "./stdlib/mod.ts";
+import { createStdlibLoader, type FFIFile, type StandardLibraryConfig } from "./stdlib/mod.ts";
+import {
+  buildFfiLayout,
+  namespaceFfiPath,
+  rewriteCompiledFfiImports,
+  rewriteFfiFile,
+} from "./stdlib/ffi_namespace.ts";
+import { moduleStubs as embeddedModuleStubs } from "./stubs.ts";
+import { GitSource } from "./deps/git_source.ts";
+import {
+  defaultEntryModule,
+  GIT_ENTRY_MODULE,
+  synthesizeGitEntry,
+  withGitRepo,
+} from "./git_entry.ts";
 
-const STUBS_DIR = new URL("./worker/stubs/", import.meta.url);
+// Imported for its side effect so `deno compile` bundles the worker into the
+// executable. The module guards its entry point, so evaluating it here (the
+// main thread) is inert; the actual worker thread runs it for real.
+import "./worker/execution_worker.ts";
 
 export interface CompileResult {
   success: boolean;
@@ -48,6 +65,10 @@ export interface GleamRunnerConfig {
   standardLibrary?: StandardLibraryConfig;
   workerPermissions?: WorkerPermissions;
   timeout?: number;
+  // Command-line arguments exposed to the program through `argv`.
+  args?: string[];
+  // Program name reported as argv[1]. Defaults to the module name.
+  programPath?: string;
 }
 
 // Constants for default values
@@ -153,6 +174,9 @@ export class GleamRunner {
   private standardLibrary: StandardLibraryConfig;
   private workerPermissions: WorkerPermissions;
   private timeout: number;
+  // Command-line arguments exposed to the program, and its reported name.
+  private args?: string[];
+  private programPath?: string;
   // Module stubs loaded from external files
   private moduleStubs: {
     gleam: string;
@@ -161,8 +185,11 @@ export class GleamRunner {
   } = { gleam: "", gleamIo: "", gleamString: "" };
   // Track all module names written during compilation
   private writtenModules: Set<string> = new Set();
-  // Track FFI files collected during stdlib loading
-  private ffiFiles: Map<string, string> = new Map();
+  // Track FFI files collected during stdlib loading, with their package so
+  // they can be placed in that package's own namespace directory.
+  private ffiFiles: FFIFile[] = [];
+  // Module name -> package that provided it (gleam/list -> gleam_stdlib).
+  private modulePackages: Map<string, string> = new Map();
 
   constructor(config: GleamRunnerConfig = {}) {
     this.wasmPath = config.wasmPath || "";
@@ -180,19 +207,13 @@ export class GleamRunner {
       env: true,
     };
     this.timeout = config.timeout || DEFAULT_TIMEOUT;
+    this.args = config.args;
+    this.programPath = config.programPath;
     this.loadModuleStubs();
   }
 
   private loadModuleStubs(): void {
-    const resolveStub = (name: string): string => {
-      const url = new URL(name, STUBS_DIR);
-      return Deno.readTextFileSync(url);
-    };
-    this.moduleStubs = {
-      gleam: resolveStub("gleam.mjs"),
-      gleamIo: resolveStub("gleam_io.mjs"),
-      gleamString: resolveStub("gleam_string.mjs"),
-    };
+    this.moduleStubs = { ...embeddedModuleStubs };
   }
 
   async initialize(): Promise<void> {
@@ -244,7 +265,8 @@ export class GleamRunner {
 
       // Clear tracked modules and FFI files for this compilation
       this.writtenModules.clear();
-      this.ffiFiles.clear();
+      this.ffiFiles = [];
+      this.modulePackages.clear();
 
       // Add standard library modules first
       await this.addStandardLibrary();
@@ -355,6 +377,12 @@ gleam_stdlib = ">= 0.40.0 and < 2.0.0"
           }
         }
 
+        // Place every package's FFI files in its own namespace directory and
+        // point the flat compiled modules at them. This keeps two packages
+        // that ship an FFI file at the same relative path from overwriting
+        // each other, and gives each file one canonical location.
+        const namespaceResult = this.namespaceFfiFiles(allModules);
+
         return {
           success: true,
           javascript: javascript || undefined,
@@ -362,7 +390,7 @@ gleam_stdlib = ">= 0.40.0 and < 2.0.0"
           warnings,
           errors,
           allModules,
-          ffiFiles: this.ffiFiles.size > 0 ? new Map(this.ffiFiles) : undefined,
+          ffiFiles: namespaceResult,
         };
       } catch (compileError) {
         // Collect warnings even if compilation fails
@@ -424,6 +452,58 @@ gleam_stdlib = ">= 0.40.0 and < 2.0.0"
     ffiFiles?: Map<string, string>,
   ): Promise<RunResult> {
     return await this.realJavaScriptExecution(jsCode, moduleName, [], allModules, ffiFiles);
+  }
+
+  /**
+   * Run a Gleam program straight out of a git repository.
+   *
+   * The repository is a normal package — its `gleam.toml` names it and lists
+   * its dependencies — so it is loaded through the same git-dependency path
+   * everything else uses. What `--git` adds is the entry point: a repository
+   * has no way to tell Subaru which module is `main`, so the package name is
+   * used, mirroring `gleam run`'s convention of running `<name>/<name>`.
+   *
+   * A caller that wants a different entry can supply `module`, e.g.
+   * `"sqlode/cli"`.
+   */
+  async runGitRepo(
+    url: string,
+    ref: string = "main",
+    module?: string,
+  ): Promise<RunResult> {
+    const gitSource = new GitSource({
+      onDebug: this.debug ? (m) => this.logger.debug(m) : undefined,
+    });
+
+    let packageName: string;
+    try {
+      const commit = await gitSource.resolveRef(url, ref);
+      const manifest = await gitSource.readGleamToml(url, commit, ref);
+      packageName = manifest.name;
+    } catch (error) {
+      return {
+        success: false,
+        output: [],
+        errors: [`Failed to read ${url}#${ref}: ${error instanceof Error ? error.message : error}`],
+      };
+    }
+
+    const entryModule = module ?? defaultEntryModule(packageName);
+    const entryCode = synthesizeGitEntry(entryModule);
+
+    // Load the repository itself as a git dependency, on top of whatever the
+    // config already asked for. A later entry replaces an earlier one with the
+    // same name, so `--git` wins over a stale config.
+    this.standardLibrary = {
+      ...this.standardLibrary,
+      packages: withGitRepo(this.standardLibrary.packages ?? [], packageName, url, ref),
+    };
+
+    this.logger.debug(`Running ${packageName} from ${url}#${ref} (entry: ${entryModule})`);
+
+    // The entry lives in its own module so it does not overwrite the repo's
+    // own module of the same name — that module is where `main` comes from.
+    return await this.run(entryCode, GIT_ENTRY_MODULE);
   }
 
   private async realJavaScriptExecution(
@@ -531,6 +611,8 @@ gleam_stdlib = ">= 0.40.0 and < 2.0.0"
           moduleStubs,
           compiledModules,
           ffiFiles: ffiFilesObj,
+          args: this.args,
+          programPath: this.programPath,
         },
       });
 
@@ -588,12 +670,24 @@ gleam_stdlib = ">= 0.40.0 and < 2.0.0"
       }
     }
 
-    // Collect FFI files from loaded packages
+    // FFI import rewriting and namespacing happen together in
+    // `namespaceFfiFiles`, once the final file locations are known.
+
+    // Collect FFI files from loaded packages. They are placed under their
+    // package's own directory later, once the layout is known.
     if (result.ffiFiles && result.ffiFiles.length > 0) {
       for (const ffiFile of result.ffiFiles) {
-        this.ffiFiles.set(ffiFile.path, ffiFile.content);
+        this.ffiFiles.push(ffiFile);
       }
       this.logger.debug(`✓ Collected ${result.ffiFiles.length} FFI files`);
+    }
+
+    // Record which package each module came from; the namespacing pass needs
+    // it to pick the right FFI directory.
+    for (const module of result.modules) {
+      if (!this.modulePackages.has(module.moduleName)) {
+        this.modulePackages.set(module.moduleName, module.packageName);
+      }
     }
 
     // Log any errors (but don't fail - fallback modules may still work)
@@ -607,6 +701,78 @@ gleam_stdlib = ">= 0.40.0 and < 2.0.0"
     if (!result.modules.some((m) => m.moduleName === "gleam/io")) {
       stdlibLoader.addFallbackIo(this.projectId, trackingWriteModule);
     }
+  }
+
+  /**
+   * Move each FFI file under `_ffi/<package>/` and rewire the references.
+   *
+   * A single pass (`rewriteFfiFile`) reworks each file's own imports for the
+   * new location: cross-package and build-directory specifiers are flattened
+   * to the compiled tree, FFI-to-FFI specifiers follow the move, and imports
+   * of compiled modules are re-relativized from the namespaced directory.
+   * Compiled modules are then pointed at the namespaced FFI files.
+   *
+   * @returns namespaced path (`_ffi/<package>/...`) -> content, or undefined
+   * when no FFI files were loaded.
+   */
+  private namespaceFfiFiles(allModules: Map<string, string>): Map<string, string> | undefined {
+    if (this.ffiFiles.length === 0) return undefined;
+
+    const knownPackages = new Set(this.ffiFiles.map((ffiFile) => ffiFile.packageName));
+    const layout = buildFfiLayout(
+      this.ffiFiles,
+      [...this.writtenModules].map((moduleName) => ({
+        moduleName,
+        packageName: this.packageOf(moduleName),
+      })),
+    );
+
+    const namespaced = new Map<string, string>();
+    let rewrites = 0;
+    for (const ffiFile of this.ffiFiles) {
+      const namespacedPath = namespaceFfiPath(ffiFile.packageName, ffiFile.path);
+
+      const content = rewriteFfiFile(ffiFile.content, {
+        packageName: ffiFile.packageName,
+        ffiPath: ffiFile.path,
+        layout,
+        knownPackages,
+        onRewrite: (from, to) => {
+          rewrites++;
+          this.logger.trace(`FFI import in ${ffiFile.path}: ${from} -> ${to}`);
+        },
+        onUnknownPackage: (specifier, packageName) => {
+          this.logger.warn(
+            `⚠ ${ffiFile.path} imports ${specifier}, but package ${packageName} is not loaded`,
+          );
+        },
+      });
+
+      if (namespaced.has(namespacedPath) && namespaced.get(namespacedPath) !== content) {
+        this.logger.warn(`⚠ FFI path collision: two packages both ship ${ffiFile.path}`);
+      }
+      namespaced.set(namespacedPath, content);
+    }
+
+    let moduleRewrites = 0;
+    for (const [moduleName, code] of allModules) {
+      const rewritten = rewriteCompiledFfiImports(code, moduleName, layout);
+      if (rewritten !== code) {
+        allModules.set(moduleName, rewritten);
+        moduleRewrites++;
+      }
+    }
+
+    this.logger.debug(
+      `✓ Namespaced ${namespaced.size} FFI files (${rewrites} imports rewritten); ` +
+        `rewired ${moduleRewrites} compiled modules`,
+    );
+    return namespaced;
+  }
+
+  /** Package a written module belongs to, as recorded by the loader. */
+  private packageOf(moduleName: string): string {
+    return this.modulePackages.get(moduleName) ?? moduleName.split("/")[0];
   }
 
   private async addPreloadScripts(): Promise<void> {

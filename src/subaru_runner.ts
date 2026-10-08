@@ -60,6 +60,20 @@ export class Subaru {
     }
   }
 
+  /**
+   * Run a Gleam program directly from a git repository.
+   *
+   * The repo's `gleam.toml` names the package; its `<name>.main()` is run,
+   * matching `gleam run`'s convention. Pass `module` to choose another entry.
+   */
+  async executeFromGit(url: string, ref: string = "main", module?: string): Promise<RunResult> {
+    if (!this.initialized) {
+      await this.init();
+    }
+
+    return await this.runner.runGitRepo(url, ref, module);
+  }
+
   // Convenience method for quick execution
   static async run(gleamCode: string, config?: SubaruConfig): Promise<RunResult> {
     const subaru = new Subaru(config);

@@ -19,6 +19,10 @@ export interface WorkerMessage {
     compiledModules?: Record<string, string>;
     // FFI JavaScript files (path -> content)
     ffiFiles?: Record<string, string>;
+    // Arguments to expose to the running program as command-line args.
+    args?: string[];
+    // Path shown as the program name (argv[1]).
+    programPath?: string;
   };
 }
 
@@ -32,19 +36,35 @@ export interface WorkerResponse {
 
 const workerSelf = self as unknown as Worker;
 
-// Worker entry point
-workerSelf.onmessage = async (event: MessageEvent<WorkerMessage>) => {
-  const { type, payload } = event.data;
+/**
+ * Whether this module is running inside a dedicated worker.
+ *
+ * It is imported for its side effect from `gleam_runner.ts` so `deno compile`
+ * bundles it into the executable; that same import also evaluates the module
+ * on the main thread, where there is no `onmessage` to serve. The guard keeps
+ * the entry inert there.
+ */
+function isDedicatedWorker(): boolean {
+  return typeof self !== "undefined" && !("window" in self) &&
+    typeof (self as { postMessage?: unknown }).postMessage === "function";
+}
 
-  if (type === "execute") {
-    await executeModule(payload);
-  }
-};
+// Worker entry point
+if (isDedicatedWorker()) {
+  workerSelf.onmessage = async (event: MessageEvent<WorkerMessage>) => {
+    const { type, payload } = event.data;
+
+    if (type === "execute") {
+      await executeModule(payload);
+    }
+  };
+}
 
 async function executeModule(
   payload: WorkerMessage["payload"],
 ): Promise<void> {
-  const { jsCode, moduleName, tempDir, moduleStubs, compiledModules, ffiFiles } = payload;
+  const { jsCode, moduleName, tempDir, moduleStubs, compiledModules, ffiFiles, args, programPath } =
+    payload;
 
   try {
     // Create directory structure
@@ -92,15 +112,26 @@ async function executeModule(
     const originalLog = console.log;
     const originalError = console.error;
     console.log = (...args: unknown[]) => {
-      self.postMessage({ type: "output", line: args.map(String).join(" ") });
+      workerSelf.postMessage({ type: "output", line: args.map(String).join(" ") });
     };
     console.error = (...args: unknown[]) => {
-      self.postMessage({ type: "output", line: args.map(String).join(" ") });
+      workerSelf.postMessage({ type: "output", line: args.map(String).join(" ") });
     };
 
     // Write the main module
     const tempFile = `${tempDir}/${moduleName}.mjs`;
     await Deno.writeTextFile(tempFile, jsCode);
+
+    // Expose command-line arguments to the program. Gleam CLIs (e.g. sqlode)
+    // go through `argv`, whose JS FFI reads `process.argv` before `Deno.args`;
+    // a worker's `Deno.args` is fixed and cannot be assigned, so a minimal
+    // `process` shim is what actually reaches the program.
+    if (args) {
+      const program = programPath ?? `${moduleName}.mjs`;
+      (globalThis as { process?: { argv: string[] } }).process = {
+        argv: ["deno", program, ...args],
+      };
+    }
 
     // Execute the module using dynamic import
     const module = await import(`file://${tempFile}`);

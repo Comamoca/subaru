@@ -49,4 +49,10 @@ export class Logger {
       console.debug(...args);
     }
   }
+
+  trace(...args: unknown[]): void {
+    if (LOG_LEVEL_ORDER[this.level] >= LOG_LEVEL_ORDER["trace"]) {
+      console.debug(...args);
+    }
+  }
 }

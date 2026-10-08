@@ -21,6 +21,7 @@ export {
 
 export {
   createStdlibLoader,
+  type FFIFile,
   type LoadedModule,
   type LoadResult,
   type PackageConfig,

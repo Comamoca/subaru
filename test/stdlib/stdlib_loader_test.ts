@@ -239,8 +239,11 @@ Deno.test("StdlibLoader - include filter on package load", async () => {
     const hasMainModule = result.modules.some((m) => m.moduleName === "gleam/json");
     assertEquals(hasMainModule, true);
 
-    // All loaded modules should match the filter
-    for (const mod of result.modules) {
+    // Filters apply to the package they are declared on. Dependencies resolved
+    // alongside it (gleam_stdlib here) are loaded whole, because the compiler
+    // needs all of their modules.
+    const fromGleamJson = result.modules.filter((mod) => mod.packageName === "gleam_json");
+    for (const mod of fromGleamJson) {
       const matches = mod.moduleName === "gleam/json" ||
         mod.moduleName.startsWith("gleam/json/");
       assertEquals(matches, true, `Module ${mod.moduleName} should match include filter`);
