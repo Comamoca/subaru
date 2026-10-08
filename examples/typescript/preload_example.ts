@@ -76,7 +76,7 @@ pub fn int_to_string(value: Int) -> String {
       result.errors.forEach((error) => console.log(`   ${error}`));
     }
   } catch (error) {
-    console.error("❌ Error:", error.message);
+    console.error("❌ Error:", error instanceof Error ? error.message : String(error));
   }
 }
 

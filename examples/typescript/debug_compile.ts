@@ -34,7 +34,7 @@ async function debugCompile() {
       result.warnings.forEach((warning) => console.log(`   ${warning}`));
     }
   } catch (error) {
-    console.error("❌ Error:", error.message);
+    console.error("❌ Error:", error instanceof Error ? error.message : String(error));
   }
 }
 
