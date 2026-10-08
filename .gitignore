@@ -1,6 +1,8 @@
 *.beam
 *.ez
 /build
+# Local standalone binary from `deno task compile`
+/dist
 erl_crash.dump
 .devenv
 .direnv
