@@ -69,7 +69,10 @@ async function runExamples() {
       compileResult.errors.forEach((error) => console.log(`   ${error}`));
     }
   } catch (error) {
-    console.error("\\n❌ Error running examples:", error.message);
+    console.error(
+      "\\n❌ Error running examples:",
+      error instanceof Error ? error.message : String(error),
+    );
     console.log("\\n💡 Make sure to download the WASM compiler first:");
     console.log("   chmod +x scripts/download-gleam-wasm.sh");
     console.log("   ./scripts/download-gleam-wasm.sh");

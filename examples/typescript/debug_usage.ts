@@ -56,7 +56,10 @@ async function testDebugModes() {
       remoteResult.errors.forEach((error) => console.log(`   ${error}`));
     }
   } catch (error) {
-    console.log("   Remote execution test skipped:", error.message);
+    console.log(
+      "   Remote execution test skipped:",
+      error instanceof Error ? error.message : String(error),
+    );
   }
 }
 

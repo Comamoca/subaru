@@ -10,24 +10,24 @@
     "isomorphic-git/http": "npm:isomorphic-git@1.27.1/http/web/index.js"
   },
   "tasks": {
-    "help": "deno run --allow-all -q src/cli.ts --help && echo '\\n📋 Available deno tasks:' && echo '  deno task setup       📥 Download Gleam WASM compiler' && echo '  deno task test        🧪 Run Deno tests' && echo '  deno task example     🚀 Run example usage' && echo '  deno task fmt         ✨ Format TypeScript code' && echo '  deno task lint        🔍 Lint TypeScript code' && echo '  deno task check       🔧 Type check TypeScript code' && echo '  deno task build-gleam 🔨 Build Gleam project' && echo '  deno task run-gleam   ▶️  Run Gleam project' && echo '  deno task clean       🧹 Clean generated files' && echo '  deno task clean-wasm  🗑️  Remove cached WASM compiler' && echo '  deno task clean-cache 🗑️  Remove entire cache directory' && echo '  deno task dev         🛠️  Setup and run dev environment'",
+    "help": "deno run --allow-all --unstable-raw-imports -q src/cli.ts --help && echo '\\n📋 Available deno tasks:' && echo '  deno task setup       📥 Download Gleam WASM compiler' && echo '  deno task test        🧪 Run Deno tests' && echo '  deno task example     🚀 Run example usage' && echo '  deno task fmt         ✨ Format TypeScript code' && echo '  deno task lint        🔍 Lint TypeScript code' && echo '  deno task check       🔧 Type check TypeScript code' && echo '  deno task build-gleam 🔨 Build Gleam project' && echo '  deno task run-gleam   ▶️  Run Gleam project' && echo '  deno task clean       🧹 Clean generated files' && echo '  deno task clean-wasm  🗑️  Remove cached WASM compiler' && echo '  deno task clean-cache 🗑️  Remove entire cache directory' && echo '  deno task dev         🛠️  Setup and run dev environment'",
     "setup": "deno run --allow-all src/setup.ts",
-    "test": "echo '🧪 Running tests...' && deno test --allow-all --unstable-worker-options test/",
-    "example": "echo '🚀 Running examples...' && deno run --allow-all --unstable-worker-options examples/typescript/simple_usage.ts",
-    "example:debug": "deno run --allow-all --unstable-worker-options examples/typescript/debug_usage.ts",
-    "example:preload": "deno run --allow-all --unstable-worker-options examples/typescript/preload_example.ts",
+    "test": "echo '🧪 Running tests...' && deno test --allow-all --unstable-worker-options --unstable-raw-imports test/",
+    "example": "echo '🚀 Running examples...' && deno run --allow-all --unstable-worker-options --unstable-raw-imports examples/typescript/simple_usage.ts",
+    "example:debug": "deno run --allow-all --unstable-worker-options --unstable-raw-imports examples/typescript/debug_usage.ts",
+    "example:preload": "deno run --allow-all --unstable-worker-options --unstable-raw-imports examples/typescript/preload_example.ts",
     "fmt": "echo '✨ Formatting code...' && deno fmt",
     "lint": "echo '🔍 Linting code...' && deno lint",
-    "check": "echo '🔧 Type checking...' && deno check src/*.ts src/*/*.ts test/*.ts test/*/*.ts examples/*.ts",
+    "check": "echo '🔧 Type checking...' && deno check --unstable-raw-imports src/*.ts src/*/*.ts test/*.ts test/*/*.ts examples/typescript/*.ts",
     "build-gleam": "echo '🔨 Building Gleam project...' && gleam build",
     "run-gleam": "echo '▶️  Running Gleam project...' && gleam run",
     "clean": "echo '🧹 Cleaning up...' && rm -rf wasm-compiler/ build/ public/",
     "clean-wasm": "echo '🗑️  Removing cached WASM compiler...' && rm -rf ~/.cache/subaru/wasm-compiler && echo '✅ WASM compiler cache cleared'",
     "clean-cache": "echo '🗑️  Removing entire cache directory...' && rm -rf ~/.cache/subaru && echo '✅ Cache directory cleared'",
     "dev": "deno task setup && echo '🛠️  Development environment ready!' && echo 'Try: deno task example'",
-    "cli": "deno run --allow-all --unstable-worker-options src/cli.ts",
-    "compile": "echo '📦 Compiling standalone binary to dist/subaru...' && deno compile --allow-all --unstable-worker-options --output dist/subaru src/cli.ts",
-    "init-config": "deno run --allow-all src/cli.ts --init-config"
+    "cli": "deno run --allow-all --unstable-worker-options --unstable-raw-imports src/cli.ts",
+    "compile": "echo '📦 Compiling standalone binary to dist/subaru...' && deno compile --allow-all --unstable-worker-options --unstable-raw-imports --output dist/subaru src/cli.ts",
+    "init-config": "deno run --allow-all --unstable-raw-imports src/cli.ts --init-config"
   },
   "fmt": {
     "useTabs": false,
