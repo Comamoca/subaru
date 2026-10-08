@@ -1,6 +1,7 @@
 import { assertEquals } from "https://deno.land/std@0.218.0/assert/mod.ts";
 import {
   defaultEntryModule,
+  entryAlias,
   GIT_ENTRY_MODULE,
   synthesizeGitEntry,
   withGitRepo,
@@ -22,10 +23,29 @@ pub fn main() {
   );
 });
 
-Deno.test("synthesizeGitEntry - nested entry module is called by its path", () => {
+Deno.test("entryAlias - a nested module is bound under its last segment", () => {
+  assertEquals(entryAlias("sqlode"), "sqlode");
+  assertEquals(entryAlias("hinoto/cli"), "cli");
+  assertEquals(entryAlias("pkg/a/b"), "b");
+});
+
+Deno.test("synthesizeGitEntry - nested entry imports an explicit alias and calls it", () => {
+  assertEquals(
+    synthesizeGitEntry("hinoto/cli"),
+    `import hinoto/cli as cli
+
+pub fn main() {
+  cli.main()
+}
+`,
+  );
+});
+
+Deno.test("synthesizeGitEntry - nested entry never calls through the slash path", () => {
   const code = synthesizeGitEntry("sqlode/cli");
-  assertEquals(code.includes("import sqlode/cli"), true);
-  assertEquals(code.includes("sqlode/cli.main()"), true);
+  assertEquals(code.includes("import sqlode/cli as cli"), true);
+  assertEquals(code.includes("cli.main()"), true);
+  assertEquals(code.includes("sqlode/cli.main()"), false);
 });
 
 Deno.test("withGitRepo - appends the repo as a git dependency", () => {

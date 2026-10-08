@@ -14,16 +14,34 @@ export function defaultEntryModule(packageName: string): string {
 }
 
 /**
+ * The name a Gleam expression uses for an imported module: the last path
+ * segment. `import hinoto/cli` binds the module as `cli`, so a call site must
+ * read `cli.main()` and never `hinoto/cli.main()`.
+ */
+export function entryAlias(entryModule: string): string {
+  const segments = entryModule.split("/");
+  return segments[segments.length - 1];
+}
+
+/**
  * The Gleam source that runs a repository's entry point.
  *
- * The module is imported and its `main` called. For a nested entry such as
- * `sqlode/cli` the last segment is the module the function lives in.
+ * The module is imported and its `main` called. A nested entry such as
+ * `hinoto/cli` cannot be called through its full path, because Gleam binds the
+ * module under its last segment, so the import names that alias explicitly and
+ * the call goes through it. A package named after the module itself needs no
+ * alias and keeps the plain `import <package>` form.
  */
 export function synthesizeGitEntry(entryModule: string): string {
-  return `import ${entryModule}
+  const alias = entryAlias(entryModule);
+  const importLine = alias === entryModule
+    ? `import ${entryModule}`
+    : `import ${entryModule} as ${alias}`;
+
+  return `${importLine}
 
 pub fn main() {
-  ${entryModule}.main()
+  ${alias}.main()
 }
 `;
 }
