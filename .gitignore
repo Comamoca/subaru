@@ -6,6 +6,9 @@ erl_crash.dump
 .direnv
 /.agent-shell/
 
+# Kiro agent workspace
+.kiro/
+
 # agentplane: ignore runtime/transient workspace artifacts
 .env
 .agentplane/worktrees
